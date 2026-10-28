@@ -153,10 +153,14 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
       api.getLatestOrder().then((latest) => {
         if (latest) {
           const isDelivery = latest.orderType === 'Home Delivery';
+          const isOutForDelivery = latest.status === 'Out for Delivery';
+          const hasRider = Boolean(latest.deliveryPartnerName && latest.deliveryPartnerPhone);
+
           setActiveOrder({
             id: latest.id,
             placedAt: latest.placedTime || 'Recently placed',
             status: latest.status === 'New' ? 'Order Placed & Confirmed' : latest.status === 'Preparing' ? 'Preparing in Kitchen' : latest.status === 'Out for Delivery' ? 'Out for Delivery' : latest.status,
+            orderType: latest.orderType,
             eta: latest.status === 'Out for Delivery' ? 'Arriving in 10–15 mins' : latest.status === 'Preparing' ? 'Ready in 15–20 mins' : 'Estimated 25–30 mins',
             etaSubtext: latest.status === 'Out for Delivery' ? (isDelivery ? 'Rider is on the way to your address!' : 'Ready for pickup at counter!') : 'Freshly prepared by Greenwood chefs',
             items: latest.items.map((i, idx) => ({
@@ -172,14 +176,16 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               line2: 'Narela Delivery Zone',
               phone: latest.customerPhone,
             },
-            rider: {
-              name: 'Amit Kumar',
-              status: latest.status === 'Out for Delivery' ? 'On the way to you' : 'Assigned Greenwood Executive',
-              rating: '4.8',
-              deliveries: '320+ deliveries',
-              image: '/images/orders/rider_amit.jpg',
-              phone: '+91 98111 22334',
-            },
+            rider: (isOutForDelivery && hasRider)
+              ? {
+                  name: latest.deliveryPartnerName,
+                  status: 'On the way to your address',
+                  rating: '4.8',
+                  deliveries: 'Greenwood Delivery Partner',
+                  image: '/images/orders/rider_amit.jpg',
+                  phone: latest.deliveryPartnerPhone,
+                }
+              : null,
           });
         }
       }).catch(() => {});
@@ -332,10 +338,10 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                 </span>
               </div>
 
-              {/* Order Heading */}
+              {/* Order Heading with Clean Inter Font */}
               <div className="flex items-baseline gap-3 flex-wrap">
                 <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#17261D]">
-                  Order {liveOrder.id}
+                  Order <span className="font-sans font-bold text-lg sm:text-xl text-[#17261D]">{liveOrder.id}</span>
                 </h2>
                 <span className="text-xs sm:text-[13px] text-[#77766D] font-sans">
                   Placed on {liveOrder.placedAt}
@@ -544,67 +550,97 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               </div>
             </div>
 
-            {/* Panel 3: Delivery Partner */}
+            {/* Panel 3: Delivery / Fulfillment Partner */}
             <div className="bg-[#FAF6EE]/50 border border-[#E8DDCA] rounded-xl p-3.5 sm:p-4 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2.5">
-                  <h3 className="font-serif text-sm sm:text-base font-bold text-[#17261D]">
-                    Delivery Partner
+                  <h3 className="font-sans text-xs sm:text-sm font-bold text-[#17261D] uppercase tracking-wider">
+                    {liveOrder.orderType === 'Takeaway' ? 'Pickup Counter' : 'Delivery Partner'}
                   </h3>
                   <svg className="w-4 h-4 text-[#8F5D2C]" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
                   </svg>
                 </div>
 
-                {/* Rider Info Row */}
-                <div className="flex items-center gap-3">
-                  <img
-                    src={liveOrder.rider.image}
-                    alt={liveOrder.rider.name}
-                    className="w-11 h-11 rounded-full object-cover ring-2 ring-[#163E26]/20 border border-[#E8DDCA]"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/images/orders/rider_amit.jpg';
-                    }}
-                  />
+                {/* If Out for Delivery AND rider is assigned */}
+                {liveOrder.rider && (liveOrder.status === 'Out for Delivery' || activeOrder?.status === 'Out for Delivery') ? (
                   <div>
-                    <div className="font-bold text-xs sm:text-sm text-[#17261D]">
-                      {liveOrder.rider.name}
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={liveOrder.rider.image || '/images/orders/rider_amit.jpg'}
+                        alt={liveOrder.rider.name}
+                        className="w-11 h-11 rounded-full object-cover ring-2 ring-[#163E26]/20 border border-[#E8DDCA]"
+                      />
+                      <div>
+                        <div className="font-bold text-xs sm:text-sm text-[#17261D]">
+                          {liveOrder.rider.name}
+                        </div>
+                        <div className="text-[11px] text-[#163E26] font-medium">
+                          {liveOrder.rider.status || 'On the way to you'}
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] text-[#4B5149] mt-0.5">
+                          <span className="text-[#C9A45C]">★</span>
+                          <span className="font-semibold">{liveOrder.rider.rating || '4.8'}</span>
+                          <span className="text-[#77766D]">(Greenwood Partner)</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-[11px] text-[#77766D]">
-                      {liveOrder.rider.status}
-                    </div>
-                    <div className="flex items-center gap-1 text-[11px] text-[#4B5149] mt-0.5">
-                      <span className="text-[#C9A45C]">★</span>
-                      <span className="font-semibold">{liveOrder.rider.rating}</span>
-                      <span className="text-[#77766D]">({liveOrder.rider.deliveries})</span>
+
+                    {/* Contact Buttons: Call Rider + WhatsApp */}
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-2">
+                      <a
+                        href={`tel:${liveOrder.rider.phone}`}
+                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-medium py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                        </svg>
+                        Call Rider
+                      </a>
+                      <a
+                        href={`https://wa.me/91${String(liveOrder.rider.phone).replace(/\D/g, '').slice(-10)}?text=${encodeURIComponent(`Hi ${liveOrder.rider.name}, I am following up on my Greenwood order ${liveOrder.id}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-[#FFFDF8] hover:bg-[#F0EBE1] text-[#163E26] border border-[#163E26] text-xs font-medium py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5 text-[#25D366]" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86.174.086.275.072.376-.044.101-.116.433-.506.549-.68.116-.173.231-.145.39-.086s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z" />
+                        </svg>
+                        WhatsApp
+                      </a>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Contact Buttons: Call Rider + WhatsApp */}
-              <div className="grid grid-cols-2 gap-2 mt-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => showToast(`Calling Rider Amit Kumar (${liveOrder.rider.phone})...`)}
-                  className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-medium py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                  </svg>
-                  Call Rider
-                </button>
-                <a
-                  href={`https://wa.me/919811122334?text=${encodeURIComponent(`Hi Amit, I'm checking on my Greenwood order ${liveOrder.id}`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-[#FFFDF8] hover:bg-[#F0EBE1] text-[#163E26] border border-[#163E26] text-xs font-medium py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5 text-[#25D366]" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86.174.086.275.072.376-.044.101-.116.433-.506.549-.68.116-.173.231-.145.39-.086s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z" />
-                  </svg>
-                  WhatsApp
-                </a>
+                ) : liveOrder.orderType === 'Takeaway' ? (
+                  <div>
+                    <div className="p-3 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA]">
+                      <div className="font-bold text-xs sm:text-sm text-[#17261D] mb-0.5">
+                        Self Pickup Order
+                      </div>
+                      <p className="text-[11px] text-[#77766D] leading-relaxed">
+                        Please collect your food package directly from the counter at Greenwood Café &amp; Restaurant, Sector A10, Narela.
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-[#163E26] font-medium">
+                      <span className="w-2 h-2 rounded-full bg-[#168039]"></span>
+                      <span>Takeaway packaging prepared fresh</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="p-3 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA]">
+                      <div className="font-bold text-xs sm:text-sm text-[#17261D] mb-0.5">
+                        Kitchen Preparation
+                      </div>
+                      <p className="text-[11px] text-[#77766D] leading-relaxed">
+                        Your order is being freshly cooked in the Greenwood kitchen. A delivery executive will be assigned automatically upon dispatch.
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-[#C9A45C] font-medium">
+                      <span className="w-2 h-2 rounded-full bg-[#C9A45C] animate-pulse"></span>
+                      <span>Partner assignment upon dispatch</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -706,7 +742,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                       }}
                     />
                     <div>
-                      <div className="font-serif font-bold text-sm sm:text-base text-[#17261D]">
+                      <div className="font-sans font-bold text-sm sm:text-base text-[#17261D]">
                         Order {order.id}
                       </div>
                       <div className="text-[11px] text-[#77766D] font-sans">
@@ -811,7 +847,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                 {/* Mobile View: Compact Vertical Stacked Card */}
                 <div className="sm:hidden space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="font-serif font-bold text-sm text-[#17261D]">
+                    <span className="font-sans font-bold text-sm text-[#17261D]">
                       Order {order.id}
                     </span>
                     {order.status === 'Delivered' ? (

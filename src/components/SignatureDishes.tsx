@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { LeafBranch, VegBadge } from './Icons';
 import { RESTAURANT_DATA } from '../data/restaurantData';
 import type { Dish } from '../data/restaurantData';
+import { api } from '../services/api';
 
 interface SignatureDishesProps {
   onAddToCart: (dish: Dish) => void;
@@ -18,11 +19,41 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
   const [addedItems, setAddedItems] = useState<Record<string, boolean>>({});
   const [isInteracting, setIsInteracting] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [dishes, setDishes] = useState<Dish[]>(RESTAURANT_DATA.signatureDishes);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const dishes = RESTAURANT_DATA.signatureDishes;
+  // Dynamic sync with backend database: load dishes marked as Trending 🔥
+  useEffect(() => {
+    let isMounted = true;
+    api
+      .getDishes()
+      .then((allDishes) => {
+        if (!isMounted || !allDishes || allDishes.length === 0) return;
+        const trendingOnly = allDishes.filter((d) => d.isTrending && d.inStock);
+        if (trendingOnly.length > 0) {
+          setDishes(
+            trendingOnly.map((d) => ({
+              id: d.id,
+              name: d.name,
+              category: d.category,
+              price: d.price,
+              image: d.image || '/images/dish-detail/rec-dal-makhani.jpg',
+              description: d.description || 'Pure Vegetarian signature delicacy.',
+              rating: d.rating || 4.8,
+              reviewsCount: d.reviews_count || 32,
+              isVeg: true,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Gentle auto-slide on mobile / scrollable viewports
   useEffect(() => {

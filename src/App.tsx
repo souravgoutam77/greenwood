@@ -22,11 +22,11 @@ import { RESTAURANT_DATA } from './data/restaurantData';
 import type { Dish } from './data/restaurantData';
 
 export const App: React.FC = () => {
-  // View routing (Default to menu or hash-based view)
+  // View routing (Default to home or hash-based view)
   const [currentView, setCurrentView] = useState<'item-detail' | 'home' | 'menu' | 'cart' | 'orders' | 'profile' | 'admin'>(() => {
     if (typeof window !== 'undefined') {
-      if (window.location.hash === '#home') {
-        return 'home';
+      if (window.location.hash === '#menu') {
+        return 'menu';
       }
       if (window.location.hash === '#cart') {
         return 'cart';
@@ -48,7 +48,7 @@ export const App: React.FC = () => {
         return 'item-detail';
       }
     }
-    return 'menu';
+    return 'home';
   });
 
   // Application State
@@ -67,7 +67,7 @@ export const App: React.FC = () => {
   // Sync hash routing
   useEffect(() => {
     const handleHashChange = () => {
-      if (window.location.hash === '#home') {
+      if (!window.location.hash || window.location.hash === '#home' || window.location.hash === '#') {
         setCurrentView('home');
       } else if (window.location.hash === '#menu') {
         setCurrentView('menu');

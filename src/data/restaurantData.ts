@@ -253,7 +253,7 @@ export const RESTAURANT_DATA = {
     hours: "11:00 AM - 11:30 PM",
     deliveryInfo: "Delivery within 15 km of Narela Hub",
     whatsAppNumber: "919066906607",
-    whatsAppLink: "https://wa.me/919066906607?text=Hi%20Greenwood%20Caf%C3%A9%2C%20I%20would%20like%20to%20place%20an%20order%20or%20reserve%20a%20table",
+    whatsAppLink: "https://wa.me/919066906607?text=Hi%20Greenwood%20Caf%C3%A9%21",
   },
   socialLinks: {
     instagram: "https://www.instagram.com/greenwoodcafeindia/",

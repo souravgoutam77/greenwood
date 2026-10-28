@@ -309,7 +309,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         </div>
 
         {/* ========================================================= */}
-        {/* SECTION 3: GUEST MODE & QUICK ORDER NOTICE                */}
+        {/* SECTION 3: VERIFIED MEMBER ACCOUNT & SECURITY             */}
         {/* ========================================================= */}
         <div className="bg-[#FFFDF8] rounded-2xl border border-[#E8DDCA] shadow-sm p-4 sm:p-5 mb-6 relative overflow-hidden">
           {/* Subtle botanical leaves in corner */}
@@ -326,15 +326,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <div className="flex items-center gap-3.5">
               <div className="w-11 h-11 rounded-full bg-[#EBF3E6] border border-[#CDE1BE] flex items-center justify-center text-[#163E26] shrink-0 shadow-2xs">
                 <svg className="w-5 h-5 text-[#163E26]" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2.52-11 4 4.5-.5 7.5.5 11 2-4.5 1.5-8 2-11 2" />
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
                 </svg>
               </div>
               <div>
                 <h3 className="font-sans font-bold text-sm sm:text-base text-[#17261D] leading-tight mb-0.5">
-                  Frictionless Ordering Active
+                  Verified Pure Veg Member
                 </h3>
                 <p className="font-sans text-xs sm:text-[13px] text-[#77766D] max-w-xl">
-                  No password required. Your orders & saved addresses are safely linked to your mobile number.
+                  Mobile OTP authentication active. Your orders, reward perks, and delivery addresses are securely synced.
                 </p>
               </div>
             </div>
@@ -358,7 +358,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   <path fill="#FBBC05" d="M5.28 14.3c-.25-.72-.38-1.49-.38-2.3s.13-1.58.38-2.3V6.58H1.27C.46 8.2 0 10.04 0 12s.46 3.8 1.27 5.42l4.01-3.12z" />
                   <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.37 0 3.32 2.57 1.27 6.58l4.01 3.12c.95-2.83 3.6-4.95 6.72-4.95z" />
                 </svg>
-                Sync with Google
+                Sync Account
               </button>
             </div>
           </div>
@@ -940,14 +940,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 </p>
                 <div className="space-y-2">
                   <a
-                    href="tel:+919876543210"
+                    href="tel:+919066906607"
                     className="flex items-center justify-between p-3 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA] hover:border-[#163E26] text-xs font-semibold text-[#17261D]"
                   >
-                    <span>📞 Call Restaurant: +91 98765 43210</span>
+                    <span>📞 Call Restaurant: +91 90669 06607</span>
                     <span className="text-[#163E26]">Call →</span>
                   </a>
                   <a
-                    href="https://wa.me/919876543210?text=Hi%20Greenwood%20Café,%20I%20have%20a%20query"
+                    href="https://wa.me/919066906607?text=Hi%20Greenwood%20Caf%C3%A9%21"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-between p-3 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA] hover:border-[#25D366] text-xs font-semibold text-[#17261D]"

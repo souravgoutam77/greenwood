@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { CartItem } from './CartDrawer';
 import { VegBadge, WhatsAppIcon, LeafBranch } from './Icons';
 import { api } from '../services/api';
+import { getCustomerAuth, type CustomerAuth } from '../services/auth';
+import { AuthModal } from './AuthModal';
 
 interface CartPageProps {
   items: CartItem[];
@@ -25,21 +27,49 @@ export const CartPage: React.FC<CartPageProps> = ({
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
 
-  // Guest Information state
+  // Authenticated Customer State (Strict - No Guest Checkout)
+  const [auth, setAuth] = useState<CustomerAuth | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [paymentMode, setPaymentMode] = useState<'Cash on Delivery' | 'UPI Payment'>('Cash on Delivery');
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState<string>('');
   const [isKitchenOpen, setIsKitchenOpen] = useState(true);
+  const [deliveryRadiusKm, setDeliveryRadiusKm] = useState('15');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    api.getSettings().then((s) => {
-      if (s && s.is_kitchen_open !== undefined) {
-        setIsKitchenOpen(s.is_kitchen_open);
+    // 1. Fetch kitchen status & settings
+    api.getSettings().then((s: any) => {
+      if (s) {
+        if (s.is_kitchen_open !== undefined) setIsKitchenOpen(s.is_kitchen_open);
+        if (s.delivery_radius) setDeliveryRadiusKm(String(s.delivery_radius).replace(/\D/g, '') || '15');
       }
     }).catch(() => {});
+
+    // 2. Fetch authenticated user session
+    const currentAuth = getCustomerAuth();
+    if (currentAuth && currentAuth.verified) {
+      setAuth(currentAuth);
+      setCustomerName(currentAuth.name);
+      setCustomerPhone(currentAuth.phone);
+    }
+
+    const handleAuthChange = (e: any) => {
+      const user = e.detail as CustomerAuth | null;
+      setAuth(user);
+      if (user && user.verified) {
+        setCustomerName(user.name);
+        setCustomerPhone(user.phone);
+      }
+    };
+
+    window.addEventListener('gw_auth_changed', handleAuthChange);
+    return () => window.removeEventListener('gw_auth_changed', handleAuthChange);
   }, []);
 
   // Bill Calculations
@@ -78,19 +108,41 @@ export const CartPage: React.FC<CartPageProps> = ({
     }
   };
 
-  // Pre-formatted WhatsApp order message with backend SQLite database persistence
+  // Order Placement Handler (Strict Authentication & Verification)
   const handlePlaceOrderWhatsApp = async () => {
+    setValidationError(null);
+
+    // Guard 1: Kitchen Operational Status
+    if (!isKitchenOpen) {
+      setValidationError('Greenwood Café & Restaurant is currently closed for online orders. Please check opening hours or contact us via WhatsApp.');
+      return;
+    }
+
+    // Guard 2: Customer Identity Verification (NO GUEST CHECKOUT)
+    if (!auth || !auth.verified) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    // Guard 3: Delivery Address (for Delivery orders)
+    if (orderType === 'delivery') {
+      if (!customerAddress || customerAddress.trim().length < 5) {
+        setValidationError('Please enter a complete delivery address within Narela hub radius.');
+        return;
+      }
+    }
+
     if (items.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
 
     let assignedId = `#GW-${Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
-      // 1. Persist real order to Backend SQLite Database
+      // 1. Persist real order to Backend Database
       const res = await api.createOrder({
-        customerName: customerName.trim() || 'Guest Customer',
-        customerPhone: customerPhone.trim() || '+91 98765 43210',
-        customerAddress: customerAddress.trim() || 'Narela Hub (Takeaway Counter)',
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        customerAddress: orderType === 'delivery' ? customerAddress.trim() : 'Narela Hub (Takeaway Counter)',
         orderType,
         paymentMode: 'Cash on Delivery',
         specialInstruction: specialNote.trim() || undefined,
@@ -106,8 +158,13 @@ export const CartPage: React.FC<CartPageProps> = ({
       if (res && res.order) {
         assignedId = res.order.id;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Backend order persistence note:', err);
+      if (err.message && err.message.includes('closed')) {
+        setValidationError(err.message);
+        setIsSubmitting(false);
+        return;
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -122,10 +179,11 @@ export const CartPage: React.FC<CartPageProps> = ({
     const msg = `🌿 *NEW ORDER [${assignedId}] — GREENWOOD CAFÉ & RESTAURANT* 🌿
 -------------------------------------------
 *Order ID:* ${assignedId}
-*Customer:* ${customerName.trim() || 'Guest Customer'}
-*Phone:* ${customerPhone.trim() || 'Not specified'}
-*Order Mode:* ${orderType === 'delivery' ? 'Home Delivery (Narela Hub)' : 'Self Takeaway'}
-${orderType === 'delivery' ? `*Address:* ${customerAddress.trim() || 'Narela Hub'}` : ''}
+*Customer:* ${customerName.trim()} (Verified Member)
+*Phone:* +91 ${customerPhone.trim()}
+*Order Mode:* ${orderType === 'delivery' ? `Home Delivery (Within ${deliveryRadiusKm}km Radius)` : 'Self Takeaway'}
+${orderType === 'delivery' ? `*Address:* ${customerAddress.trim()}` : '*Pickup:* Greenwood Café & Restaurant, Sector A10, Narela'}
+*Payment Mode:* Cash on Delivery
 
 *Items Ordered:*
 ${itemsSummary}
@@ -137,7 +195,7 @@ ${specialNote ? `*Chef Special Note:* ${specialNote}\n` : ''}-------------------
 *GST (5%):* ₹${gst}
 ${appliedCoupon ? `*Discount Applied (${appliedCoupon}):* -₹${discount}\n` : ''}*GRAND TOTAL:* ₹${grandTotal}
 -------------------------------------------
-_Please confirm availability and estimated preparation time!_`;
+_Please confirm kitchen acceptance and live preparation status!_`;
 
     const encoded = encodeURIComponent(msg);
     window.open(`https://wa.me/919066906607?text=${encoded}`, '_blank');
@@ -366,66 +424,161 @@ _Please confirm availability and estimated preparation time!_`;
 
             </div>
 
-            {/* RIGHT COLUMN: GUEST DETAILS, COUPONS & BILL BREAKDOWN (5 cols) */}
+            {/* RIGHT COLUMN: VERIFIED DETAILS, PAYMENT, COUPONS & BILL (5 cols) */}
             <div className="lg:col-span-5 space-y-5">
               
-              {/* Guest Information Card */}
+              {/* Customer Identification & Delivery Details (No Guest Checkout) */}
               <div className="bg-[#FFFDF8] border border-[#E8DDCA] rounded-2xl p-4 sm:p-5 shadow-xs">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold text-[#17261D] uppercase tracking-wider">
-                    Contact &amp; Delivery Details
+                    Customer Identity &amp; Delivery
                   </span>
-                  <span className="text-[10px] bg-[#DCE8CB] text-[#163E26] px-2 py-0.5 rounded-full font-semibold">
-                    Guest Mode
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[11px] font-medium text-[#77766D] mb-1">
-                      Your Full Name
-                    </label>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="e.g. Rahul Sharma"
-                      className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-[#77766D] mb-1">
-                      WhatsApp / Mobile Number
-                    </label>
-                    <input
-                      type="tel"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      placeholder="e.g. 9876543210"
-                      className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
-                    />
-                  </div>
-
-                  {orderType === 'delivery' && (
-                    <div>
-                      <label className="block text-[11px] font-medium text-[#77766D] mb-1">
-                        Delivery Address in Narela / Delhi
-                      </label>
-                      <input
-                        type="text"
-                        value={customerAddress}
-                        onChange={(e) => setCustomerAddress(e.target.value)}
-                        placeholder="House/Flat No, Pocket, Sector A10, Narela"
-                        className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
-                      />
-                    </div>
+                  {auth?.verified ? (
+                    <span className="text-[10px] bg-[#DCE8CB] text-[#163E26] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <span>✓</span>
+                      <span>Verified Mobile</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-[#FEF2F2] text-[#C83A25] px-2 py-0.5 rounded-full font-semibold">
+                      OTP Required
+                    </span>
                   )}
                 </div>
 
+                {auth?.verified ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA] flex items-center justify-between">
+                      <div>
+                        <div className="font-sans font-bold text-xs sm:text-sm text-[#17261D]">
+                          {auth.name}
+                        </div>
+                        <div className="text-xs text-[#77766D] mt-0.5">
+                          +91 {auth.phone} • Verified Member
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthModal(true)}
+                        className="text-[11px] font-semibold text-[#163E26] hover:underline cursor-pointer"
+                      >
+                        Change
+                      </button>
+                    </div>
+
+                    {orderType === 'delivery' && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-[#77766D]">
+                            Delivery Address in Narela / Delhi Hub <span className="text-[#C83A25]">*</span>
+                          </label>
+                          <span className="text-[10px] text-[#163E26] font-medium">
+                            Radius: {deliveryRadiusKm} km
+                          </span>
+                        </div>
+                        <textarea
+                          rows={2}
+                          required
+                          value={customerAddress}
+                          onChange={(e) => setCustomerAddress(e.target.value)}
+                          placeholder="House/Flat No, Building, Pocket, Sector A10, Narela..."
+                          className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26] resize-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-[#FFF8EE] border border-[#F3E2C4] rounded-xl text-center">
+                      <p className="text-xs text-[#2B180F] font-medium mb-2">
+                        Mobile verification is required before placing your food order.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthModal(true)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#163E26] hover:bg-[#1f5635] text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                      >
+                        <span>Verify with Mobile OTP</span>
+                        <span>&rarr;</span>
+                      </button>
+                    </div>
+
+                    {orderType === 'delivery' && (
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#77766D] mb-1">
+                          Delivery Address (Narela)
+                        </label>
+                        <input
+                          type="text"
+                          value={customerAddress}
+                          onChange={(e) => setCustomerAddress(e.target.value)}
+                          placeholder="Sector, Pocket, House No, Narela"
+                          className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <p className="text-[10px] text-[#77766D] mt-2.5">
-                  🔒 No account creation needed. Your order details are shared directly with our Greenwood Narela kitchen.
+                  📍 Verified orders are synchronized in real-time with Greenwood Narela kitchen &amp; delivery rider.
                 </p>
+              </div>
+
+              {/* Payment Mode Selection */}
+              <div className="bg-[#FFFDF8] border border-[#E8DDCA] rounded-2xl p-4 sm:p-5 shadow-xs">
+                <span className="block text-xs font-semibold text-[#17261D] mb-2.5 uppercase tracking-wider">
+                  Payment Method
+                </span>
+
+                <div className="space-y-2">
+                  {/* Cash on Delivery */}
+                  <label className="flex items-center justify-between p-3 rounded-xl border border-[#163E26] bg-[#DCE8CB]/20 cursor-pointer">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="paymentMode"
+                        checked={paymentMode === 'Cash on Delivery'}
+                        onChange={() => setPaymentMode('Cash on Delivery')}
+                        className="text-[#163E26] focus:ring-[#163E26]"
+                      />
+                      <div>
+                        <div className="text-xs font-semibold text-[#17261D]">
+                          Cash on Delivery / Pay on Pickup
+                        </div>
+                        <div className="text-[10px] text-[#77766D]">
+                          Pay cash or scan QR at your doorstep
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] bg-[#163E26] text-white px-2 py-0.5 rounded-full font-medium">
+                      Active
+                    </span>
+                  </label>
+
+                  {/* UPI Payment - Disabled Coming Soon */}
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-[#E8DDCA] bg-[#FAF6EE]/60 opacity-65 cursor-not-allowed">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="paymentMode"
+                        disabled
+                        checked={false}
+                        className="text-gray-400 cursor-not-allowed"
+                      />
+                      <div>
+                        <div className="text-xs font-semibold text-[#4B5149]">
+                          Instant UPI (GPay / PhonePe / Paytm)
+                        </div>
+                        <div className="text-[10px] text-[#77766D]">
+                          Direct in-app payment gateway
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] bg-[#E8DDCA] text-[#4B5149] px-2 py-0.5 rounded-full font-semibold">
+                      Coming Soon
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Coupons & Promo Codes */}
@@ -541,26 +694,52 @@ _Please confirm availability and estimated preparation time!_`;
                   </span>
                 </div>
 
-                {/* Primary WhatsApp Order CTA */}
-                {/* Kitchen Status Notice */}
-                {!isKitchenOpen && (
-                  <div className="p-2.5 bg-[#FEF3C7] border border-[#FDE68A] rounded-xl text-center text-xs text-[#92400E] mb-2">
-                    ⚠️ <strong>Notice:</strong> Kitchen is currently taking offline queue orders. Your order will be prioritized upon kitchen reopening.
+                {/* Validation Error Message */}
+                {validationError && (
+                  <div className="p-2.5 bg-[#FEF2F2] border border-[#FCA5A5] rounded-xl text-center text-xs text-[#C83A25] font-medium">
+                    ⚠️ {validationError}
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={handlePlaceOrderWhatsApp}
-                  className="w-full mt-3 bg-[#163E26] hover:bg-[#1E5635] text-white py-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-75"
-                >
-                  <WhatsAppIcon className="w-5 h-5 fill-white" />
-                  <span>{isSubmitting ? 'Recording Order...' : `Place Order via WhatsApp • ₹${grandTotal}`}</span>
-                </button>
+                {/* Kitchen Status Notice */}
+                {!isKitchenOpen && (
+                  <div className="p-3 bg-[#FEF3C7] border border-[#FDE68A] rounded-xl text-center text-xs text-[#92400E] mb-2 leading-relaxed">
+                    ⚠️ <strong>Kitchen Closed:</strong> Greenwood Café is currently not accepting online orders. Operational hours: 11:00 AM – 11:00 PM. Please browse our menu or WhatsApp us.
+                  </div>
+                )}
+
+                {/* Primary Action Button */}
+                {!isKitchenOpen ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full mt-3 bg-gray-400 text-white py-3 rounded-xl font-semibold text-sm shadow-none cursor-not-allowed opacity-80"
+                  >
+                    Kitchen Currently Closed • Reopening Soon
+                  </button>
+                ) : !auth?.verified ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthModal(true)}
+                    className="w-full mt-3 bg-[#163E26] hover:bg-[#1E5635] text-white py-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                  >
+                    <span>Verify Mobile to Place Order • ₹{grandTotal}</span>
+                    <span>&rarr;</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handlePlaceOrderWhatsApp}
+                    className="w-full mt-3 bg-[#163E26] hover:bg-[#1E5635] text-white py-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-75"
+                  >
+                    <WhatsAppIcon className="w-5 h-5 fill-white" />
+                    <span>{isSubmitting ? 'Recording Order...' : `Place Order via WhatsApp • ₹${grandTotal}`}</span>
+                  </button>
+                )}
 
                 <p className="text-center text-[10px] text-[#77766D]">
-                  ⚡ Fast instant order booking. Pay upon delivery via Cash or UPI.
+                  ⚡ Fast order dispatch from Sector A10, Narela. Pay upon delivery.
                 </p>
               </div>
 
@@ -571,12 +750,25 @@ _Please confirm availability and estimated preparation time!_`;
 
       </div>
 
+      {/* Mobile OTP Authentication Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={(user) => {
+          setAuth(user);
+          setCustomerName(user.name);
+          setCustomerPhone(user.phone);
+        }}
+        initialName={customerName}
+        initialPhone={customerPhone}
+      />
+
       {/* Success Modal / Toast */}
       {orderSuccess && (
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-fade-in"
           onClick={() => setOrderSuccess(false)}
         >
           <div
@@ -587,10 +779,14 @@ _Please confirm availability and estimated preparation time!_`;
               ✓
             </div>
             <h3 className="font-serif text-xl font-bold text-[#17261D]">
-              Order {createdOrderId} Placed!
+              Order Confirmed!
             </h3>
+            {/* Clean Inter font for Order ID */}
+            <div className="inline-block px-3 py-1 bg-[#FAF6EE] border border-[#E8DDCA] rounded-full font-sans font-semibold text-sm text-[#17261D]">
+              Order ID: {createdOrderId}
+            </div>
             <p className="text-xs text-[#77766D] leading-relaxed">
-              Your order is recorded in the kitchen database and dispatched via WhatsApp. You can track real-time kitchen progress!
+              Your verified order has been submitted to Greenwood Narela kitchen. You can track real-time preparation &amp; rider status!
             </p>
             <div className="space-y-2 pt-2">
               <button

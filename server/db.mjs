@@ -52,7 +52,20 @@ export function initDatabase() {
       decline_reason TEXT,
       placed_at TEXT NOT NULL,
       prep_time TEXT,
-      completed_at TEXT
+      completed_at TEXT,
+      delivery_partner_name TEXT,
+      delivery_partner_phone TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS banners (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      subtitle TEXT,
+      image_desktop TEXT NOT NULL,
+      image_mobile TEXT,
+      link_url TEXT,
+      is_active INTEGER DEFAULT 1,
+      display_order INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS order_items (
@@ -82,6 +95,78 @@ export function initDatabase() {
       is_default INTEGER DEFAULT 0
     );
   `);
+
+  // Migrations for existing database columns
+  try {
+    const orderCols = db.prepare('PRAGMA table_info(orders)').all();
+    const hasRiderName = orderCols.some((c) => c.name === 'delivery_partner_name');
+    if (!hasRiderName) {
+      db.exec('ALTER TABLE orders ADD COLUMN delivery_partner_name TEXT;');
+      db.exec('ALTER TABLE orders ADD COLUMN delivery_partner_phone TEXT;');
+    }
+    const dishCols = db.prepare('PRAGMA table_info(dishes)').all();
+    const hasTrending = dishCols.some((c) => c.name === 'is_trending');
+    if (!hasTrending) {
+      db.exec('ALTER TABLE dishes ADD COLUMN is_trending INTEGER DEFAULT 0;');
+    }
+    db.exec("UPDATE dishes SET is_trending = 1 WHERE id IN ('item-1', 'item-2', 'item-3', 'item-7');");
+  } catch (err) {
+    console.warn('Migration note:', err.message);
+  }
+
+  // Ensure admin_phones setting exists with initial authorized admin 8802325537
+  try {
+    const adminCheck = db.prepare("SELECT value FROM settings WHERE key = 'admin_phones'").get();
+    if (!adminCheck) {
+      db.prepare("INSERT INTO settings (key, value) VALUES ('admin_phones', ?)").run(JSON.stringify(['8802325537']));
+    }
+  } catch {}
+
+  // Seed default banners if not present
+  try {
+    const checkBanners = db.prepare('SELECT COUNT(*) as count FROM banners').get();
+    if (!checkBanners || checkBanners.count === 0) {
+      const defaultBanners = [
+        {
+          id: 'banner-1',
+          title: 'Good Food. Greener Moods.',
+          subtitle: '100% Pure Vegetarian Fine Dining in Narela',
+          image_desktop: '/images/hero-bg-2400.jpg',
+          image_mobile: '/images/hero-bg-mobile-1200.jpg',
+          link_url: '#menu',
+          is_active: 1,
+          display_order: 1,
+        },
+        {
+          id: 'banner-2',
+          title: 'Signature North Indian Specials',
+          subtitle: 'Slow simmered Dal Makhani & Tandoor Breads',
+          image_desktop: '/images/gallery-1.jpg',
+          image_mobile: '/images/gallery-1.jpg',
+          link_url: '#menu',
+          is_active: 1,
+          display_order: 2,
+        },
+        {
+          id: 'banner-3',
+          title: 'Private Gazebo Pods & Ambience',
+          subtitle: 'Botanical luxury dining experience for families',
+          image_desktop: '/images/gallery-2.jpg',
+          image_mobile: '/images/gallery-2.jpg',
+          link_url: '#gallery',
+          is_active: 1,
+          display_order: 3,
+        },
+      ];
+      const insertBanner = db.prepare(`
+        INSERT INTO banners (id, title, subtitle, image_desktop, image_mobile, link_url, is_active, display_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const b of defaultBanners) {
+        insertBanner.run(b.id, b.title, b.subtitle, b.image_desktop, b.image_mobile, b.link_url, b.is_active, b.display_order);
+      }
+    }
+  } catch {}
 
   // Seed Default Settings if not present
   const checkSettings = db.prepare('SELECT COUNT(*) as count FROM settings').get();

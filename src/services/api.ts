@@ -30,6 +30,7 @@ export interface ApiDish {
   rating?: number;
   reviews_count?: number;
   isVeg: boolean;
+  isTrending?: boolean;
 }
 
 export interface ApiOrderItem {
@@ -57,6 +58,19 @@ export interface ApiOrder {
   deliveryFee: number;
   total: number;
   declineReason?: string;
+  deliveryPartnerName?: string;
+  deliveryPartnerPhone?: string;
+}
+
+export interface ApiBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  imageDesktop: string;
+  imageMobile: string;
+  linkUrl: string;
+  isActive: boolean;
+  displayOrder: number;
 }
 
 export interface CreateOrderPayload {
@@ -180,6 +194,8 @@ const DEFAULT_ORDERS: ApiOrder[] = [
     subtotal: 408,
     deliveryFee: 50,
     total: 458,
+    deliveryPartnerName: 'Vikas Sharma',
+    deliveryPartnerPhone: '9811223344',
   },
   {
     id: '#GW-8468',
@@ -219,19 +235,54 @@ const DEFAULT_ORDERS: ApiOrder[] = [
 ];
 
 const DEFAULT_DISHES: ApiDish[] = [
-  { id: 'item-1', name: 'Paneer Butter Masala', category: 'North Indian', price: 349, inStock: true, image: '/images/admin/dish_paneer.jpg', description: 'Rich cottage cheese cubes simmered in a luscious butter tomato gravy.', isVeg: true },
-  { id: 'item-2', name: 'Farmhouse Pizza', category: 'Pizza & Pasta', price: 399, inStock: true, image: '/images/admin/dish_pizza.jpg', description: 'Crispy thin crust topped with bell peppers, olives, corn and mozzarella.', isVeg: true },
-  { id: 'item-3', name: 'Dal Makhani', category: 'North Indian', price: 249, inStock: true, image: '/images/admin/dish_dal.jpg', description: 'Slow-simmered black lentils infused with white butter and fresh cream.', isVeg: true },
+  { id: 'item-1', name: 'Paneer Butter Masala', category: 'North Indian', price: 349, inStock: true, image: '/images/admin/dish_paneer.jpg', description: 'Rich cottage cheese cubes simmered in a luscious butter tomato gravy.', isVeg: true, isTrending: true },
+  { id: 'item-2', name: 'Farmhouse Pizza', category: 'Pizza & Pasta', price: 399, inStock: true, image: '/images/admin/dish_pizza.jpg', description: 'Crispy thin crust topped with bell peppers, olives, corn and mozzarella.', isVeg: true, isTrending: true },
+  { id: 'item-3', name: 'Dal Makhani', category: 'North Indian', price: 249, inStock: true, image: '/images/admin/dish_dal.jpg', description: 'Slow-simmered black lentils infused with white butter and fresh cream.', isVeg: true, isTrending: true },
   { id: 'item-4', name: 'Mango Lassi', category: 'Beverages & Desserts', price: 129, inStock: true, image: '/images/admin/dish_lassi.jpg', description: 'Chilled Punjabi yogurt churned with sweet Alphonso mango pulp.', isVeg: true },
   { id: 'item-5', name: 'Garlic Naan', category: 'Breads & Rice', price: 49, inStock: true, image: '/images/admin/dish_naan.jpg', description: 'Tandoor-baked flatbread glazed with crushed garlic and fresh coriander.', isVeg: true },
   { id: 'item-6', name: 'Butter Naan', category: 'Breads & Rice', price: 59, inStock: true, image: '/images/dish-detail/pairing-butter-naan.jpg', description: 'Fluffy tandoori bread brushed with melted butter.', isVeg: true },
-  { id: 'item-7', name: 'Shahi Paneer Butter Masala', category: 'North Indian', price: 299, inStock: true, image: '/images/dish-detail/rec-shahi-paneer.jpg', description: 'Royal Mughlai style paneer in creamy cashew almond gravy.', isVeg: true },
+  { id: 'item-7', name: 'Shahi Paneer Butter Masala', category: 'North Indian', price: 299, inStock: true, image: '/images/dish-detail/rec-shahi-paneer.jpg', description: 'Royal Mughlai style paneer in creamy cashew almond gravy.', isVeg: true, isTrending: true },
   { id: 'item-8', name: 'Veg Biryani', category: 'Breads & Rice', price: 180, inStock: true, image: '/images/dish-detail/pairing-jeera-rice.jpg', description: 'Fragrant basmati rice layered with garden vegetables and saffron.', isVeg: true },
   { id: 'item-9', name: 'Paneer Tikka Masala', category: 'North Indian', price: 279, inStock: true, image: '/images/dish-detail/rec-paneer-tikka-masala.jpg', description: 'Smoky grilled paneer tikka tossed in spicy tandoori gravy.', isVeg: true },
   { id: 'item-10', name: 'Tandoori Tikka Platter', category: 'Starters', price: 299, inStock: true, image: '/images/menu/dish-tandoori-tikka.jpg', description: 'Assorted marinated vegetables & paneer roasted over charcoal.', isVeg: true },
   { id: 'item-11', name: 'Steamed Veg Momos', category: 'Starters', price: 199, inStock: true, image: '/images/menu/dish-veg-momos.jpg', description: 'Tender dumplings stuffed with crunchy veggies served with spicy dip.', isVeg: true },
   { id: 'item-12', name: 'Gulab Jamun (2 Pcs)', category: 'Beverages & Desserts', price: 99, inStock: true, image: '/images/offers/dessert_bowl.jpg', description: 'Soft golden milk dumplings soaked in cardamom sugar syrup.', isVeg: true },
 ];
+
+const DEFAULT_BANNERS: ApiBanner[] = [
+  {
+    id: 'banner-1',
+    title: 'Good Food. Greener Moods.',
+    subtitle: '100% Pure Vegetarian Fine Dining in Narela',
+    imageDesktop: '/images/hero-bg-2400.jpg',
+    imageMobile: '/images/hero-bg-mobile-1200.jpg',
+    linkUrl: '#menu',
+    isActive: true,
+    displayOrder: 1,
+  },
+  {
+    id: 'banner-2',
+    title: 'Signature North Indian Specials',
+    subtitle: 'Slow simmered Dal Makhani & Tandoor Breads',
+    imageDesktop: '/images/gallery-1.jpg',
+    imageMobile: '/images/gallery-1.jpg',
+    linkUrl: '#menu',
+    isActive: true,
+    displayOrder: 2,
+  },
+  {
+    id: 'banner-3',
+    title: 'Private Gazebo Pods & Ambience',
+    subtitle: 'Botanical luxury dining experience for families',
+    imageDesktop: '/images/gallery-2.jpg',
+    imageMobile: '/images/gallery-2.jpg',
+    linkUrl: '#gallery',
+    isActive: true,
+    displayOrder: 3,
+  },
+];
+
+const DEFAULT_ADMINS = ['8802325537'];
 
 const DEFAULT_PROFILE: ApiProfile = {
   name: 'Rahul Sharma',
@@ -544,7 +595,12 @@ export const api = {
   async updateOrderStatus(
     orderId: string,
     status: ApiOrder['status'],
-    options: { declineReason?: string; prepTime?: string } = {}
+    options: {
+      declineReason?: string;
+      prepTime?: string;
+      deliveryPartnerName?: string;
+      deliveryPartnerPhone?: string;
+    } = {}
   ): Promise<{ success: boolean; order: ApiOrder }> {
     const hasServer = await checkApiAvailability();
     if (hasServer) {
@@ -555,6 +611,8 @@ export const api = {
           status,
           declineReason: options.declineReason,
           prepTime: options.prepTime,
+          deliveryPartnerName: options.deliveryPartnerName,
+          deliveryPartnerPhone: options.deliveryPartnerPhone,
         }),
       });
       if (res.ok) return res.json();
@@ -570,6 +628,8 @@ export const api = {
           declineReason: options.declineReason ?? o.declineReason,
           prepTime: options.prepTime ?? o.prepTime,
           completedTime: status === 'Completed' ? 'Completed just now' : o.completedTime,
+          deliveryPartnerName: options.deliveryPartnerName ?? o.deliveryPartnerName,
+          deliveryPartnerPhone: options.deliveryPartnerPhone ?? o.deliveryPartnerPhone,
         };
         return updatedOrder;
       }
@@ -583,6 +643,8 @@ export const api = {
         status,
         declineReason: options.declineReason,
         prepTime: options.prepTime,
+        deliveryPartnerName: options.deliveryPartnerName,
+        deliveryPartnerPhone: options.deliveryPartnerPhone,
       }).catch(() => {});
     }
 
@@ -665,5 +727,140 @@ export const api = {
     const nextList = current.filter((a) => a.id !== addressId);
     setStorageItem('addresses', nextList);
     return { success: true };
+  },
+
+  // 5. Banners
+  async getBanners(): Promise<ApiBanner[]> {
+    const hasServer = await checkApiAvailability();
+    if (hasServer) {
+      const res = await fetch('/api/banners');
+      if (res.ok) return res.json();
+    }
+    return getStorageItem<ApiBanner[]>('banners', DEFAULT_BANNERS);
+  },
+
+  async addBanner(banner: Partial<ApiBanner>): Promise<{ success: boolean; banner: ApiBanner }> {
+    const hasServer = await checkApiAvailability();
+    if (hasServer) {
+      const res = await fetch('/api/banners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(banner),
+      });
+      if (res.ok) return res.json();
+    }
+
+    const current = getStorageItem<ApiBanner[]>('banners', DEFAULT_BANNERS);
+    const newBanner: ApiBanner = {
+      id: `banner-${Date.now()}`,
+      title: banner.title || 'Greenwood Café',
+      subtitle: banner.subtitle || '',
+      imageDesktop: banner.imageDesktop || '/images/hero-bg-2400.jpg',
+      imageMobile: banner.imageMobile || banner.imageDesktop || '/images/hero-bg-mobile-1200.jpg',
+      linkUrl: banner.linkUrl || '#menu',
+      isActive: banner.isActive ?? true,
+      displayOrder: banner.displayOrder ?? current.length + 1,
+    };
+    const next = [...current, newBanner];
+    setStorageItem('banners', next);
+    return { success: true, banner: newBanner };
+  },
+
+  async updateBanner(id: string, updates: Partial<ApiBanner>): Promise<{ success: boolean; banner: ApiBanner }> {
+    const hasServer = await checkApiAvailability();
+    if (hasServer) {
+      const res = await fetch(`/api/banners/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) return res.json();
+    }
+
+    const current = getStorageItem<ApiBanner[]>('banners', DEFAULT_BANNERS);
+    let updated: ApiBanner | null = null;
+    const next = current.map((b) => {
+      if (b.id === id) {
+        updated = { ...b, ...updates };
+        return updated;
+      }
+      return b;
+    });
+    setStorageItem('banners', next);
+    return { success: true, banner: updated || current[0] };
+  },
+
+  async deleteBanner(id: string): Promise<{ success: boolean }> {
+    const hasServer = await checkApiAvailability();
+    if (hasServer) {
+      const res = await fetch(`/api/banners/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) return res.json();
+    }
+
+    const current = getStorageItem<ApiBanner[]>('banners', DEFAULT_BANNERS);
+    const next = current.filter((b) => b.id !== id);
+    setStorageItem('banners', next);
+    return { success: true };
+  },
+
+  // 6. Admin Authentication & Verification
+  async verifyAdmin(phone: string): Promise<{ authorized: boolean; error?: string }> {
+    const clean = phone.replace(/\D/g, '').slice(-10);
+    const hasServer = await checkApiAvailability();
+    if (hasServer) {
+      try {
+        const res = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: clean }),
+        });
+        const data = await res.json();
+        return { authorized: res.ok && data.authorized, error: data.error };
+      } catch (err: any) {
+        return { authorized: false, error: err.message };
+      }
+    }
+
+    const currentAdmins = getStorageItem<string[]>('admin_phones', DEFAULT_ADMINS);
+    const isAuth = currentAdmins.some((p) => p.replace(/\D/g, '').slice(-10) === clean);
+    return {
+      authorized: isAuth,
+      error: isAuth ? undefined : 'This mobile number is not authorized to access Greenwood Admin Panel.',
+    };
+  },
+
+  async getAdminPhones(): Promise<string[]> {
+    const hasServer = await checkApiAvailability();
+    if (hasServer) {
+      const res = await fetch('/api/settings/admins');
+      if (res.ok) {
+        const data = await res.json();
+        return data.admins || [];
+      }
+    }
+    return getStorageItem<string[]>('admin_phones', DEFAULT_ADMINS);
+  },
+
+  async updateAdminPhones(admins: string[]): Promise<string[]> {
+    const cleanAdmins = admins.map((p) => p.replace(/\D/g, '').slice(-10)).filter((p) => p.length === 10);
+    if (!cleanAdmins.includes('8802325537')) cleanAdmins.unshift('8802325537');
+
+    const hasServer = await checkApiAvailability();
+    if (hasServer) {
+      const res = await fetch('/api/settings/admins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admins: cleanAdmins }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.admins;
+      }
+    }
+
+    setStorageItem('admin_phones', cleanAdmins);
+    return cleanAdmins;
   },
 };

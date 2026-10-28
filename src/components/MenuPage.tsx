@@ -26,6 +26,7 @@ export const MenuPage: React.FC<MenuPageProps> = ({
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [dishStockMap, setDishStockMap] = useState<Record<string, boolean>>({});
+  const [trendingDishes, setTrendingDishes] = useState<Dish[]>(SIGNATURE_TRENDING_DISHES);
 
   useEffect(() => {
     let isMounted = true;
@@ -39,6 +40,23 @@ export const MenuPage: React.FC<MenuPageProps> = ({
           if (d.name) map[d.name.toLowerCase().trim()] = d.inStock;
         });
         setDishStockMap(map);
+
+        const trendingOnly = dishes.filter((d) => d.isTrending);
+        if (trendingOnly.length > 0) {
+          setTrendingDishes(
+            trendingOnly.map((d) => ({
+              id: d.id,
+              name: d.name,
+              category: d.category,
+              price: d.price,
+              image: d.image || '/images/dish-detail/rec-dal-makhani.jpg',
+              description: d.description || 'Special signature pure vegetarian preparation.',
+              rating: d.rating || 4.8,
+              reviewsCount: d.reviews_count || 45,
+              isVeg: true,
+            }))
+          );
+        }
       } catch {
         // graceful fallback to inStock: true
       }
@@ -407,7 +425,7 @@ export const MenuPage: React.FC<MenuPageProps> = ({
 
               {/* 4 Cards Grid (Desktop 4 cols, Mobile 2 cols) */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
-                {SIGNATURE_TRENDING_DISHES.map(renderDishCard)}
+                {trendingDishes.map(renderDishCard)}
               </div>
             </section>
 

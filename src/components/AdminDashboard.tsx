@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { VegBadge } from './Icons';
-import { api } from '../services/api';
+import { VegBadge, LeafBranch } from './Icons';
+import { api, type ApiBanner } from '../services/api';
 
 export interface AdminOrderItem {
   name: string;
@@ -24,6 +24,8 @@ export interface AdminOrder {
   specialInstruction?: string;
   total: number;
   declineReason?: string;
+  deliveryPartnerName?: string;
+  deliveryPartnerPhone?: string;
 }
 
 export interface MenuItemData {
@@ -33,6 +35,7 @@ export interface MenuItemData {
   price: number;
   inStock: boolean;
   image: string;
+  isTrending?: boolean;
 }
 
 interface AdminDashboardProps {
@@ -42,6 +45,20 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onNavigateToCustomerSite,
 }) => {
+  // Admin Security / Login Guard (Authorized Admin Mobile: 8802325537)
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    try {
+      const sess = localStorage.getItem('gw_admin_session');
+      return Boolean(sess && JSON.parse(sess).authorized);
+    } catch {
+      return false;
+    }
+  });
+
+  const [adminLoginPhone, setAdminLoginPhone] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
+
   // Navigation State — strictly the 5 core sections
   const [activeSection, setActiveSection] = useState<'Dashboard' | 'Live Orders' | 'Menu Items' | 'Order History' | 'Settings'>('Dashboard');
   
@@ -69,16 +86,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [restaurantPhone, setRestaurantPhone] = useState('+91 98765 43210');
   const [kitchenPhone, setKitchenPhone] = useState('+91 98123 45678');
 
+  // Banners & Admins
+  const [banners, setBanners] = useState<ApiBanner[]>([]);
+  const [adminPhones, setAdminPhones] = useState<string[]>(['8802325537']);
+  const [newAdminPhone, setNewAdminPhone] = useState('');
+
+  // Dispatch Rider State
+  const [dispatchRiderName, setDispatchRiderName] = useState('Vikas Sharma');
+  const [dispatchRiderPhone, setDispatchRiderPhone] = useState('9811223344');
+
   // UI state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Modal State
   const [activeModal, setActiveModal] = useState<{
-    type: 'kot' | 'details' | 'decline' | 'edit-dish' | 'add-dish' | 'receipt';
+    type: 'kot' | 'details' | 'decline' | 'edit-dish' | 'add-dish' | 'receipt' | 'dispatch' | 'banner';
     title: string;
     order?: AdminOrder;
     dish?: MenuItemData;
+    banner?: Partial<ApiBanner>;
   } | null>(null);
 
   // Decline order input
@@ -93,7 +120,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     category: 'North Indian',
     price: 250,
     inStock: true,
+    isTrending: false,
     image: '/images/dish-detail/rec-dal-makhani.jpg',
+  });
+
+  // Banner form state
+  const [bannerForm, setBannerForm] = useState<Partial<ApiBanner>>({
+    title: '',
+    subtitle: '',
+    imageDesktop: '/images/hero-bg-2400.jpg',
+    imageMobile: '/images/hero-bg-mobile-1200.jpg',
+    linkUrl: '#menu',
+    isActive: true,
+    displayOrder: 1,
   });
 
   const showToast = (msg: string) => {
@@ -264,10 +303,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     let isMounted = true;
     const loadInitialData = async () => {
       try {
-        const [fetchedOrders, fetchedDishes, fetchedSettings] = await Promise.all([
+        const [fetchedOrders, fetchedDishes, fetchedSettings, fetchedBanners, fetchedAdmins] = await Promise.all([
           api.getOrders(),
           api.getDishes(),
           api.getSettings(),
+          api.getBanners(),
+          api.getAdminPhones(),
         ]);
         if (!isMounted) return;
         if (fetchedOrders && fetchedOrders.length > 0) {
@@ -275,6 +316,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         }
         if (fetchedDishes && fetchedDishes.length > 0) {
           setMenuItems(fetchedDishes as any);
+        }
+        if (fetchedBanners && fetchedBanners.length > 0) {
+          setBanners(fetchedBanners);
+        }
+        if (fetchedAdmins && fetchedAdmins.length > 0) {
+          setAdminPhones(fetchedAdmins);
         }
         if (fetchedSettings) {
           setIsKitchenOpen(fetchedSettings.is_kitchen_open);
@@ -312,6 +359,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
   }, []);
 
+  // Admin Login & Logout handlers
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoginError(null);
+    const clean = adminLoginPhone.replace(/\D/g, '').slice(-10);
+    if (clean.length !== 10) {
+      setAdminLoginError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    setAdminLoginLoading(true);
+    try {
+      const res = await api.verifyAdmin(clean);
+      if (res.authorized) {
+        setIsAdminLoggedIn(true);
+        localStorage.setItem(
+          'gw_admin_session',
+          JSON.stringify({ authorized: true, phone: clean, time: Date.now() })
+        );
+        showToast('Admin authorized! Welcome to Greenwood Control Panel.');
+      } else {
+        setAdminLoginError(res.error || 'This mobile number is not authorized for Admin Panel access.');
+      }
+    } catch (err: any) {
+      setAdminLoginError(err.message || 'Verification connection failed');
+    } finally {
+      setAdminLoginLoading(false);
+    }
+  };
+
+  const handleAdminLogout = () => {
+    localStorage.removeItem('gw_admin_session');
+    setIsAdminLoggedIn(false);
+    showToast('Admin session locked.');
+  };
+
   // Order Actions & Transitions (Connected to SQLite REST API)
   const handleAcceptOrder = async (orderId: string) => {
     setOrders((prev) =>
@@ -325,13 +407,64 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleOpenDispatchModal = (order: AdminOrder) => {
+    if (order.orderType === 'Takeaway' || order.orderType === 'Dine-in') {
+      handleMarkReady(order.id);
+    } else {
+      setActiveModal({
+        type: 'dispatch',
+        title: `Dispatch Order ${order.id} • Assign Rider`,
+        order,
+      });
+    }
+  };
+
+  const handleConfirmDispatch = async () => {
+    if (!activeModal?.order) return;
+    const orderId = activeModal.order.id;
+    const name = dispatchRiderName.trim() || 'Greenwood Express Rider';
+    const phone = dispatchRiderPhone.replace(/\D/g, '').slice(-10);
+
+    if (phone.length !== 10) {
+      showToast('Please enter a valid 10-digit rider phone number');
+      return;
+    }
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              status: 'Out for Delivery',
+              prepTime: 'Out for Delivery',
+              deliveryPartnerName: name,
+              deliveryPartnerPhone: phone,
+            }
+          : o
+      )
+    );
+
+    setActiveModal(null);
+    showToast(`Order ${orderId} dispatched with rider ${name}!`);
+
+    try {
+      await api.updateOrderStatus(orderId, 'Out for Delivery', {
+        prepTime: 'Out for Delivery',
+        deliveryPartnerName: name,
+        deliveryPartnerPhone: phone,
+      });
+    } catch (err) {
+      console.error('Failed to sync dispatch status to API:', err);
+    }
+  };
+
   const handleMarkReady = async (orderId: string) => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'Out for Delivery', prepTime: 'Ready for Dispatch' } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, status: 'Out for Delivery', prepTime: 'Ready for Pickup' } : o))
     );
-    showToast(`Order ${orderId} marked ready for dispatch!`);
+    showToast(`Order ${orderId} marked ready for pickup!`);
     try {
-      await api.updateOrderStatus(orderId, 'Out for Delivery', { prepTime: 'Ready for Dispatch' });
+      await api.updateOrderStatus(orderId, 'Out for Delivery', { prepTime: 'Ready for Pickup' });
     } catch (err) {
       console.error('Failed to sync ready status to API:', err);
     }
@@ -346,6 +479,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       await api.updateOrderStatus(orderId, 'Completed');
     } catch (err) {
       console.error('Failed to sync completed status to API:', err);
+    }
+  };
+
+  const handleToggleTrending = async (dishId: string) => {
+    let nextState = false;
+    setMenuItems((prev) =>
+      prev.map((item) => {
+        if (item.id === dishId) {
+          nextState = !item.isTrending;
+          showToast(`${item.name} is ${nextState ? 'now Trending 🔥' : 'removed from Trending'}`);
+          return { ...item, isTrending: nextState };
+        }
+        return item;
+      })
+    );
+    try {
+      await api.updateDish(dishId, { isTrending: nextState });
+    } catch (err) {
+      console.error('Failed to sync trending status to API:', err);
     }
   };
 
@@ -413,6 +565,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category: (newDishForm.category as any) || 'North Indian',
       price: Number(newDishForm.price),
       inStock: newDishForm.inStock ?? true,
+      isTrending: Boolean(newDishForm.isTrending),
       image: newDishForm.image || '/images/dish-detail/rec-dal-makhani.jpg',
     };
     setMenuItems((prev) => [dishToAdd, ...prev]);
@@ -422,6 +575,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category: 'North Indian',
       price: 250,
       inStock: true,
+      isTrending: false,
       image: '/images/dish-detail/rec-dal-makhani.jpg',
     });
     showToast(`"${dishToAdd.name}" added to menu catalog!`);
@@ -432,12 +586,109 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         category: dishToAdd.category,
         price: dishToAdd.price,
         inStock: dishToAdd.inStock,
+        isTrending: dishToAdd.isTrending,
         image: dishToAdd.image,
         description: 'Freshly prepared Pure Vegetarian specialty.',
         isVeg: true,
       });
     } catch (err) {
       console.error('Failed to persist new dish to API:', err);
+    }
+  };
+
+  const handleToggleBannerActive = async (bannerId: string) => {
+    let nextState = true;
+    setBanners((prev) =>
+      prev.map((b) => {
+        if (b.id === bannerId) {
+          nextState = !b.isActive;
+          return { ...b, isActive: nextState };
+        }
+        return b;
+      })
+    );
+    try {
+      await api.updateBanner(bannerId, { isActive: nextState });
+      showToast(`Banner ${nextState ? 'Activated 🟢' : 'Disabled ⏸'}`);
+    } catch (err) {
+      console.error('Failed to update banner:', err);
+    }
+  };
+
+  const handleSaveBanner = async () => {
+    if (!bannerForm.title?.trim()) {
+      showToast('Banner title is required');
+      return;
+    }
+
+    if (activeModal?.banner?.id) {
+      const bannerId = activeModal.banner.id;
+      setBanners((prev) =>
+        prev.map((b) => (b.id === bannerId ? ({ ...b, ...bannerForm } as ApiBanner) : b))
+      );
+      try {
+        await api.updateBanner(bannerId, bannerForm);
+        showToast('Banner updated successfully!');
+      } catch (err) {
+        console.error('Failed to update banner:', err);
+      }
+    } else {
+      try {
+        const res = await api.addBanner(bannerForm);
+        if (res.banner) {
+          setBanners((prev) => [...prev, res.banner]);
+          showToast('New homepage banner added!');
+        }
+      } catch (err) {
+        console.error('Failed to create banner:', err);
+      }
+    }
+    setActiveModal(null);
+  };
+
+  const handleDeleteBanner = async (bannerId: string) => {
+    setBanners((prev) => prev.filter((b) => b.id !== bannerId));
+    try {
+      await api.deleteBanner(bannerId);
+      showToast('Banner deleted.');
+    } catch (err) {
+      console.error('Failed to delete banner:', err);
+    }
+  };
+
+  const handleAddAdminPhone = async () => {
+    const clean = newAdminPhone.replace(/\D/g, '').slice(-10);
+    if (clean.length !== 10) {
+      showToast('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    if (adminPhones.includes(clean)) {
+      showToast('This admin phone is already authorized');
+      return;
+    }
+    const updated = [...adminPhones, clean];
+    setAdminPhones(updated);
+    setNewAdminPhone('');
+    showToast(`Admin +91 ${clean} authorized!`);
+    try {
+      await api.updateAdminPhones(updated);
+    } catch (err) {
+      console.error('Failed to sync admin phones:', err);
+    }
+  };
+
+  const handleRemoveAdminPhone = async (phone: string) => {
+    if (phone === '8802325537') {
+      showToast('Primary owner mobile cannot be removed');
+      return;
+    }
+    const updated = adminPhones.filter((p) => p !== phone);
+    setAdminPhones(updated);
+    showToast(`Admin +91 ${phone} removed.`);
+    try {
+      await api.updateAdminPhones(updated);
+    } catch (err) {
+      console.error('Failed to remove admin phone:', err);
     }
   };
 
@@ -515,6 +766,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     return true;
   });
+
+  // Admin Security Portal Guard (8802325537)
+  if (!isAdminLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#FAF6EE] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#FFFDF8] rounded-2xl border border-[#E8DDCA] shadow-2xl p-6 sm:p-8 text-center animate-fade-in">
+          <div className="inline-flex items-center justify-center gap-2 text-[#163E26] mb-2">
+            <LeafBranch flip={false} className="w-5 h-2.5" />
+            <span className="font-serif text-sm tracking-widest uppercase font-semibold">
+              Greenwood Café &amp; Restaurant
+            </span>
+            <LeafBranch flip={true} className="w-5 h-2.5" />
+          </div>
+
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#17261D] mt-1 mb-2">
+            Restaurant Admin Access
+          </h1>
+          <p className="text-xs text-[#77766D] mb-6 max-w-sm mx-auto leading-relaxed font-sans">
+            Restricted operational portal. Please enter your authorized administrator mobile number to manage orders, catalog, and kitchen status.
+          </p>
+
+          {adminLoginError && (
+            <div className="mb-4 p-3 rounded-xl bg-[#FEF2F2] border border-[#FCA5A5] text-[#C83A25] text-xs font-semibold text-center">
+              ⚠️ {adminLoginError}
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-semibold text-[#17261D] mb-1.5 font-sans">
+                Authorized Administrator Mobile Number
+              </label>
+              <div className="flex">
+                <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-[#E8DDCA] bg-[#FAF6EE] text-[#4B5149] text-sm font-semibold font-sans">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  required
+                  maxLength={10}
+                  value={adminLoginPhone}
+                  onChange={(e) => setAdminLoginPhone(e.target.value.replace(/\D/g, ''))}
+                  placeholder="8802325537"
+                  className="w-full px-3.5 py-2.5 bg-[#FAF6EE] border border-[#E8DDCA] rounded-r-xl text-sm text-[#17261D] font-medium font-sans focus:outline-none focus:border-[#163E26]"
+                  autoFocus
+                />
+              </div>
+              <p className="text-[11px] text-[#77766D] mt-1.5 font-sans">
+                Authorized Admin: <strong className="text-[#163E26]">8802325537</strong>
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={adminLoginLoading}
+              className="w-full bg-[#163E26] hover:bg-[#1E5233] text-white py-3 rounded-xl font-semibold text-sm shadow-md transition-all active:scale-98 disabled:opacity-75 cursor-pointer font-sans"
+            >
+              {adminLoginLoading ? 'Verifying Authorization...' : 'Unlock Admin Panel →'}
+            </button>
+          </form>
+
+          <div className="mt-6 pt-4 border-t border-[#E8DDCA]/60 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={handleSwitchToCustomerSite}
+              className="text-xs font-semibold text-[#8F5D2C] hover:text-[#163E26] flex items-center gap-1 cursor-pointer font-sans"
+            >
+              <span>← Return to Customer Website</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#FAF6EE] text-[#4B5149] font-sans flex flex-col antialiased">
@@ -616,6 +941,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
             <span className="font-medium text-[11px]">Manager</span>
           </div>
+
+          {/* Lock / Logout Session */}
+          <button
+            type="button"
+            onClick={handleAdminLogout}
+            className="bg-[#2B180F] hover:bg-[#3D2517] text-[#C9A45C] border border-[#C9A45C]/40 text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-xs cursor-pointer"
+            title="Lock Admin Session"
+          >
+            <span>🔒</span>
+            <span className="hidden sm:inline">Lock</span>
+          </button>
 
           {/* Switch to Customer Site Button */}
           <button
@@ -1225,10 +1561,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <>
                                     <button
                                       type="button"
-                                      onClick={() => handleMarkReady(order.id)}
+                                      onClick={() => handleOpenDispatchModal(order)}
                                       className="w-full bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold py-2 px-3 rounded-lg shadow-xs cursor-pointer"
                                     >
-                                      Mark Food Ready / Dispatch
+                                      {order.orderType === 'Home Delivery' ? 'Assign Rider & Dispatch →' : 'Mark Ready for Pickup'}
                                     </button>
                                     <div className="grid grid-cols-2 gap-2">
                                       <button
@@ -1251,21 +1587,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                                 {isDelivery && (
                                   <div className="space-y-2">
-                                    <div className="bg-[#DCE8CB] text-[#163E26] p-1.5 rounded text-center text-xs font-semibold">
-                                      🛵 On the way (10-15 mins)
+                                    <div className="bg-[#DCE8CB] text-[#163E26] p-2 rounded-lg text-xs font-semibold">
+                                      <div className="flex items-center justify-between">
+                                        <span>🛵 Out for Delivery</span>
+                                        {order.deliveryPartnerPhone && (
+                                          <a
+                                            href={`tel:${order.deliveryPartnerPhone}`}
+                                            className="underline text-[11px]"
+                                          >
+                                            Call Rider
+                                          </a>
+                                        )}
+                                      </div>
+                                      {order.deliveryPartnerName && (
+                                        <div className="text-[11px] font-normal text-[#163E26]/90 mt-0.5">
+                                          Rider: {order.deliveryPartnerName} • +91 {order.deliveryPartnerPhone}
+                                        </div>
+                                      )}
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                       <button
                                         type="button"
                                         onClick={() => handleMarkCompleted(order.id)}
-                                        className="bg-[#163E26] text-white text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
                                       >
-                                        Mark Delivered
+                                        ✓ Mark Delivered
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setActiveModal({ type: 'details', title: `Order ${order.id}`, order })}
-                                        className="bg-[#FFFDF8] border border-[#E8DDCA] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="bg-[#FFFDF8] hover:bg-[#FAF6EE] border border-[#E8DDCA] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
                                       >
                                         Details
                                       </button>
@@ -1372,7 +1723,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <th className="py-2.5 px-3 sm:px-4">Dish</th>
                           <th className="py-2.5 px-3 sm:px-4">Category</th>
                           <th className="py-2.5 px-3 sm:px-4">Price</th>
-                          <th className="py-2.5 px-3 sm:px-4">Availability</th>
+                          <th className="py-2.5 px-3 sm:px-4">Stock</th>
+                          <th className="py-2.5 px-3 sm:px-4">Trending 🔥</th>
                           <th className="py-2.5 px-3 sm:px-4 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -1430,6 +1782,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   {dish.inStock ? 'In Stock' : 'Sold Out'}
                                 </span>
                               </div>
+                            </td>
+
+                            <td className="py-2.5 px-3 sm:px-4">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTrending(dish.id)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
+                                  dish.isTrending
+                                    ? 'bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B] shadow-2xs'
+                                    : 'bg-[#FAF6EE] text-[#77766D] border border-[#E8DDCA] hover:border-[#F59E0B]'
+                                }`}
+                              >
+                                <span>🔥</span>
+                                <span>{dish.isTrending ? 'Trending' : 'Normal'}</span>
+                              </button>
                             </td>
 
                             <td className="py-2.5 px-3 sm:px-4 text-right">
@@ -1748,10 +2115,189 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       type="button"
                       onClick={handleSaveSettings}
-                      className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer"
+                      className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer shadow-xs"
                     >
                       Save Settings
                     </button>
+                  </div>
+                </div>
+
+                {/* Homepage Banner Slider Management */}
+                <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 sm:p-5 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E8DDCA]/60 pb-3">
+                    <div>
+                      <h2 className="font-serif text-base font-bold text-[#17261D]">
+                        Homepage Banner Slider Management
+                      </h2>
+                      <p className="text-xs text-[#77766D]">
+                        Control mobile and desktop promotional slides shown on the customer homepage.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBannerForm({
+                          title: '',
+                          subtitle: '',
+                          imageDesktop: '/images/hero-bg-2400.jpg',
+                          imageMobile: '/images/hero-bg-mobile-1200.jpg',
+                          linkUrl: '#menu',
+                          displayOrder: banners.length + 1,
+                          isActive: true,
+                        });
+                        setActiveModal({ type: 'banner', title: 'Add Homepage Banner' });
+                      }}
+                      className="inline-flex items-center gap-1 bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer self-start sm:self-auto shadow-xs"
+                    >
+                      <span>+ Add Banner</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {banners.length === 0 ? (
+                      <p className="text-xs text-[#77766D] italic py-2">No custom banners found. Using system defaults.</p>
+                    ) : (
+                      banners.map((b) => (
+                        <div
+                          key={b.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={b.imageMobile || b.imageDesktop}
+                              alt={b.title}
+                              className="w-16 h-10 object-cover rounded border border-[#E8DDCA] shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/images/hero-bg-mobile-1200.jpg';
+                              }}
+                            />
+                            <div>
+                              <div className="font-bold text-xs text-[#17261D] flex items-center gap-1.5">
+                                <span>{b.title}</span>
+                                {!b.isActive && (
+                                  <span className="text-[10px] bg-[#FCE8E6] text-[#C83A25] px-1.5 py-0.2 rounded font-semibold">
+                                    Disabled
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-[#77766D] line-clamp-1">{b.subtitle || 'No subtitle'}</p>
+                              <div className="text-[10px] text-[#A89885] mt-0.5 font-mono">
+                                Order: {b.displayOrder ?? 0} &nbsp;|&nbsp; Target: {b.linkUrl}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBannerActive(b.id)}
+                              className={`text-[11px] font-semibold px-2.5 py-1 rounded cursor-pointer ${
+                                b.isActive
+                                  ? 'bg-[#DCE8CB] text-[#163E26] border border-[#163E26]/20'
+                                  : 'bg-[#FEE2E2] text-[#C83A25] border border-[#C83A25]/20'
+                              }`}
+                            >
+                              {b.isActive ? 'Active 🟢' : 'Paused ⏸'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBannerForm({ ...b });
+                                setActiveModal({ type: 'banner', title: `Edit Banner: ${b.title}`, banner: b });
+                              }}
+                              className="text-[11px] font-semibold text-[#163E26] hover:text-[#C9A45C] px-2.5 py-1 bg-white rounded border border-[#E8DDCA] cursor-pointer"
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBanner(b.id)}
+                              className="text-[11px] font-semibold text-[#C83A25] hover:text-red-700 px-2 py-1 cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Authorized Administrators Management */}
+                <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 sm:p-5 shadow-xs space-y-4">
+                  <div className="border-b border-[#E8DDCA]/60 pb-3">
+                    <h2 className="font-serif text-base font-bold text-[#17261D]">
+                      Authorized Administrators Access Control
+                    </h2>
+                    <p className="text-xs text-[#77766D]">
+                      Only mobile numbers listed here can unlock the Greenwood Admin Panel.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-[#4B5149] block">
+                      Add New Authorized Admin Mobile (10 Digits):
+                    </label>
+                    <div className="flex items-center gap-2 max-w-md">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#77766D]">
+                          +91
+                        </span>
+                        <input
+                          type="tel"
+                          maxLength={10}
+                          value={newAdminPhone}
+                          onChange={(e) => setNewAdminPhone(e.target.value.replace(/\D/g, ''))}
+                          placeholder="e.g. 9812345678"
+                          className="w-full bg-[#FAF6EE] pl-10 pr-3 py-1.5 rounded-lg border border-[#E8DDCA] text-xs font-semibold text-[#17261D] focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddAdminPhone}
+                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg cursor-pointer whitespace-nowrap shadow-xs"
+                      >
+                        + Authorize Admin
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <div className="text-xs font-semibold text-[#77766D] mb-2 uppercase tracking-wider text-[10px]">
+                      Currently Authorized Admin Devices:
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {adminPhones.map((phone) => (
+                        <div
+                          key={phone}
+                          className="flex items-center justify-between p-2.5 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA] text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-[#168039]" />
+                            <span className="font-bold text-[#17261D] font-mono">+91 {phone}</span>
+                            {phone === '8802325537' && (
+                              <span className="bg-[#FEF3C7] text-[#92400E] text-[9px] font-bold px-1.5 py-0.5 rounded border border-[#F59E0B]">
+                                Primary Owner
+                              </span>
+                            )}
+                          </div>
+
+                          {phone !== '8802325537' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAdminPhone(phone)}
+                              className="text-[11px] font-semibold text-[#C83A25] hover:underline cursor-pointer"
+                            >
+                              Revoke
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-[#A89885] italic">Locked</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -2021,6 +2567,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {editDishForm.inStock ? '● In Stock' : '● Sold Out'}
                   </button>
                 </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-[#E8DDCA]/50">
+                  <div>
+                    <span className="text-xs font-semibold text-[#17261D] block">Trending Specialty 🔥</span>
+                    <span className="text-[10px] text-[#77766D]">Highlight on customer home & signature dishes</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditDishForm({ ...editDishForm, isTrending: !editDishForm.isTrending })}
+                    className={`px-3 py-1 rounded-full text-xs font-bold cursor-pointer ${
+                      editDishForm.isTrending
+                        ? 'bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B]'
+                        : 'bg-[#FAF6EE] text-[#77766D] border border-[#E8DDCA]'
+                    }`}
+                  >
+                    {editDishForm.isTrending ? '🔥 Trending' : 'Normal'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2063,6 +2627,157 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none"
                     />
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-[#E8DDCA]/50">
+                  <div>
+                    <span className="text-xs font-semibold text-[#17261D] block">Mark as Trending Signature Dish 🔥</span>
+                    <span className="text-[10px] text-[#77766D]">Display in Trending section immediately</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(newDishForm.isTrending)}
+                    onChange={(e) => setNewDishForm({ ...newDishForm, isTrending: e.target.checked })}
+                    className="w-4 h-4 text-[#163E26] rounded border-[#E8DDCA]"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Dispatch Order / Assign Delivery Partner Modal */}
+            {activeModal.type === 'dispatch' && activeModal.order && (
+              <div className="my-2 space-y-3 text-xs text-[#4B5149]">
+                <div className="p-3 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA] space-y-1">
+                  <div className="flex justify-between font-bold text-xs text-[#17261D]">
+                    <span>Order: {activeModal.order.id}</span>
+                    <span className="text-[#168039]">Home Delivery</span>
+                  </div>
+                  <div><strong>Customer:</strong> {activeModal.order.customerName} ({activeModal.order.customerPhone})</div>
+                  <div className="text-[11px] text-[#77766D]"><strong>Destination:</strong> {activeModal.order.customerAddressOrTable}</div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-[#17261D] block">
+                    Assign Delivery Partner Details:
+                  </label>
+                  <p className="text-[11px] text-[#77766D]">
+                    Rider information will be visible to the customer on live tracking only after dispatch.
+                  </p>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Rider Full Name *</label>
+                    <input
+                      type="text"
+                      value={dispatchRiderName}
+                      onChange={(e) => setDispatchRiderName(e.target.value)}
+                      placeholder="e.g. Vikas Sharma"
+                      className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs font-medium text-[#17261D] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Rider 10-Digit Mobile *</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#77766D]">+91</span>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        value={dispatchRiderPhone}
+                        onChange={(e) => setDispatchRiderPhone(e.target.value.replace(/\D/g, ''))}
+                        placeholder="9811223344"
+                        className="w-full bg-[#FAF6EE] pl-10 pr-3 py-2 rounded-lg border border-[#E8DDCA] text-xs font-bold text-[#17261D] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Banner Add / Edit Modal */}
+            {activeModal.type === 'banner' && (
+              <div className="my-2 space-y-2.5 text-xs text-[#4B5149]">
+                <div>
+                  <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Banner Title *</label>
+                  <input
+                    type="text"
+                    value={bannerForm.title ?? ''}
+                    onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
+                    placeholder="e.g. Pure Vegetarian Botanical Feast"
+                    className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Subtitle / Offer Description</label>
+                  <input
+                    type="text"
+                    value={bannerForm.subtitle ?? ''}
+                    onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
+                    placeholder="e.g. Handcrafted Slow-Cooked Dal Makhani & Artisanal Breads"
+                    className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Desktop Image URL</label>
+                    <input
+                      type="text"
+                      value={bannerForm.imageDesktop ?? ''}
+                      onChange={(e) => setBannerForm({ ...bannerForm, imageDesktop: e.target.value })}
+                      placeholder="/images/hero-bg-2400.jpg"
+                      className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs font-mono text-[#17261D] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Mobile Image URL</label>
+                    <input
+                      type="text"
+                      value={bannerForm.imageMobile ?? ''}
+                      onChange={(e) => setBannerForm({ ...bannerForm, imageMobile: e.target.value })}
+                      placeholder="/images/hero-bg-mobile-1200.jpg"
+                      className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs font-mono text-[#17261D] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Target Link URL</label>
+                    <input
+                      type="text"
+                      value={bannerForm.linkUrl ?? '#menu'}
+                      onChange={(e) => setBannerForm({ ...bannerForm, linkUrl: e.target.value })}
+                      placeholder="#menu"
+                      className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Display Order</label>
+                    <input
+                      type="number"
+                      value={bannerForm.displayOrder ?? 1}
+                      onChange={(e) => setBannerForm({ ...bannerForm, displayOrder: Number(e.target.value) })}
+                      className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-[#E8DDCA]/50">
+                  <span className="text-xs font-semibold text-[#17261D]">Banner Status</span>
+                  <button
+                    type="button"
+                    onClick={() => setBannerForm({ ...bannerForm, isActive: !bannerForm.isActive })}
+                    className={`px-3 py-1 rounded-full text-xs font-bold cursor-pointer ${
+                      bannerForm.isActive
+                        ? 'bg-[#DCE8CB] text-[#163E26]'
+                        : 'bg-[#FEE2E2] text-[#C83A25]'
+                    }`}
+                  >
+                    {bannerForm.isActive ? '● Active' : '● Inactive'}
+                  </button>
                 </div>
               </div>
             )}
@@ -2117,6 +2832,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="bg-[#163E26] hover:bg-[#1E5233] text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                 >
                   Add Dish
+                </button>
+              )}
+
+              {activeModal.type === 'dispatch' && (
+                <button
+                  type="button"
+                  onClick={handleConfirmDispatch}
+                  className="bg-[#163E26] hover:bg-[#1E5233] text-white px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
+                >
+                  Confirm Rider & Dispatch Order
+                </button>
+              )}
+
+              {activeModal.type === 'banner' && (
+                <button
+                  type="button"
+                  onClick={handleSaveBanner}
+                  className="bg-[#163E26] hover:bg-[#1E5233] text-white px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
+                >
+                  Save Banner
                 </button>
               )}
             </div>

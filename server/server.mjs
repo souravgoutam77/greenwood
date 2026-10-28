@@ -143,6 +143,7 @@ export const server = http.createServer(async (req, res) => {
             ...r,
             inStock: Boolean(r.in_stock),
             isVeg: Boolean(r.is_veg),
+            isTrending: Boolean(r.is_trending),
           }));
           return sendJSON(res, 200, dishes);
         }
@@ -154,18 +155,19 @@ export const server = http.createServer(async (req, res) => {
           }
           const id = `dish-${Date.now()}`;
           const inStock = body.inStock === false ? 0 : 1;
+          const isTrending = body.isTrending ? 1 : 0;
           const image = body.image || '/images/dish-detail/rec-dal-makhani.jpg';
           db.prepare(`
-            INSERT INTO dishes (id, name, category, subcategory, price, description, in_stock, image, rating, reviews_count, is_veg)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-          `).run(id, body.name.trim(), body.category, body.subcategory || 'Special', Number(body.price), body.description || '', inStock, image, 4.8, 25);
+            INSERT INTO dishes (id, name, category, subcategory, price, description, in_stock, image, rating, reviews_count, is_veg, is_trending)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+          `).run(id, body.name.trim(), body.category, body.subcategory || 'Special', Number(body.price), body.description || '', inStock, image, 4.8, 25, isTrending);
 
           const created = db.prepare('SELECT * FROM dishes WHERE id = ?').get(id);
-          return sendJSON(res, 201, { success: true, dish: { ...created, inStock: Boolean(created.in_stock), isVeg: true } });
+          return sendJSON(res, 201, { success: true, dish: { ...created, inStock: Boolean(created.in_stock), isVeg: true, isTrending: Boolean(created.is_trending) } });
         }
       }
 
-      // 3b. Update Single Dish (Stock toggle or editing)
+      // 3b. Update Single Dish (Stock toggle, trending, or editing)
       if (pathname.startsWith('/api/dishes/') && (method === 'PATCH' || method === 'PUT')) {
         const dishId = pathname.replace('/api/dishes/', '');
         const body = await parseJSONBody(req);
@@ -179,15 +181,16 @@ export const server = http.createServer(async (req, res) => {
         const updatedPrice = body.price !== undefined ? Number(body.price) : current.price;
         const updatedCategory = body.category !== undefined ? body.category : current.category;
         const updatedInStock = body.inStock !== undefined ? (body.inStock ? 1 : 0) : current.in_stock;
+        const updatedTrending = body.isTrending !== undefined ? (body.isTrending ? 1 : 0) : current.is_trending;
 
         db.prepare(`
           UPDATE dishes
-          SET name = ?, price = ?, category = ?, in_stock = ?
+          SET name = ?, price = ?, category = ?, in_stock = ?, is_trending = ?
           WHERE id = ?
-        `).run(updatedName, updatedPrice, updatedCategory, updatedInStock, dishId);
+        `).run(updatedName, updatedPrice, updatedCategory, updatedInStock, updatedTrending, dishId);
 
         const updated = db.prepare('SELECT * FROM dishes WHERE id = ?').get(dishId);
-        return sendJSON(res, 200, { success: true, dish: { ...updated, inStock: Boolean(updated.in_stock) } });
+        return sendJSON(res, 200, { success: true, dish: { ...updated, inStock: Boolean(updated.in_stock), isTrending: Boolean(updated.is_trending) } });
       }
 
       // 4. Orders: List all orders with items
@@ -235,6 +238,8 @@ export const server = http.createServer(async (req, res) => {
             deliveryFee: o.delivery_fee,
             total: o.total,
             declineReason: o.decline_reason,
+            deliveryPartnerName: o.delivery_partner_name || '',
+            deliveryPartnerPhone: o.delivery_partner_phone || '',
             items,
           };
         });
@@ -250,19 +255,54 @@ export const server = http.createServer(async (req, res) => {
           const recent = db.prepare('SELECT * FROM orders ORDER BY ROWID DESC LIMIT 1').get();
           if (!recent) return sendJSON(res, 200, null);
           const items = db.prepare('SELECT name, price, quantity, image FROM order_items WHERE order_id = ?').all(recent.id);
-          return sendJSON(res, 200, { ...recent, items });
+          return sendJSON(res, 200, {
+            ...recent,
+            deliveryPartnerName: recent.delivery_partner_name || '',
+            deliveryPartnerPhone: recent.delivery_partner_phone || '',
+            items,
+          });
         }
         const items = db.prepare('SELECT name, price, quantity, image FROM order_items WHERE order_id = ?').all(latestOrder.id);
-        return sendJSON(res, 200, { ...latestOrder, items });
+        return sendJSON(res, 200, {
+          ...latestOrder,
+          deliveryPartnerName: latestOrder.delivery_partner_name || '',
+          deliveryPartnerPhone: latestOrder.delivery_partner_phone || '',
+          items,
+        });
       }
 
-      // 4c. Create New Order (Customer Checkout)
+      // 4c. Create New Order (Customer Checkout - Strict Validation & Verification)
       if (pathname === '/api/orders' && method === 'POST') {
+        // Step 1: Check if Restaurant / Kitchen is currently open
+        const kitchenSetting = db.prepare("SELECT value FROM settings WHERE key = 'is_kitchen_open'").get();
+        if (kitchenSetting && kitchenSetting.value === 'false') {
+          return sendJSON(res, 403, {
+            error: 'Greenwood Café is currently closed for online orders. Please check operational hours or contact us directly on WhatsApp.',
+          });
+        }
+
         const body = await parseJSONBody(req);
         const { customerName, customerPhone, customerAddress, orderType, paymentMode, specialInstruction, items } = body;
 
-        if (!customerName || !customerPhone || !items || !Array.isArray(items) || items.length === 0) {
-          return sendJSON(res, 400, { error: 'Customer details and at least one item are required' });
+        // Step 2: Validate customer identity (No anonymous or guest checkout allowed)
+        if (!customerName || customerName.trim().length < 2) {
+          return sendJSON(res, 400, { error: 'Customer full name is required for order verification' });
+        }
+
+        const cleanPhone = String(customerPhone || '').replace(/\D/g, '').slice(-10);
+        if (cleanPhone.length !== 10) {
+          return sendJSON(res, 400, { error: 'A valid 10-digit mobile number is required for order confirmation' });
+        }
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+          return sendJSON(res, 400, { error: 'Your cart is empty. Please add items before placing an order.' });
+        }
+
+        const isTakeaway = orderType === 'takeaway' || orderType === 'Takeaway';
+
+        // Step 3: Validate delivery address for Home Delivery orders
+        if (!isTakeaway && (!customerAddress || customerAddress.trim().length < 5)) {
+          return sendJSON(res, 400, { error: 'A complete delivery address is required for Home Delivery orders' });
         }
 
         // Server-side recalculation of subtotal to guarantee data integrity
@@ -288,7 +328,6 @@ export const server = http.createServer(async (req, res) => {
           });
         }
 
-        const isTakeaway = orderType === 'takeaway' || orderType === 'Takeaway';
         const deliveryFee = isTakeaway || calculatedSubtotal >= 500 ? 0 : 49;
         const grandTotal = calculatedSubtotal + deliveryFee;
 
@@ -299,13 +338,13 @@ export const server = http.createServer(async (req, res) => {
 
         // Insert into database
         db.prepare(`
-          INSERT INTO orders (id, customer_name, customer_phone, customer_address, order_type, payment_mode, special_instruction, subtotal, delivery_fee, total, status, placed_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?)
+          INSERT INTO orders (id, customer_name, customer_phone, customer_address, order_type, payment_mode, special_instruction, subtotal, delivery_fee, total, status, placed_at, delivery_partner_name, delivery_partner_phone)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, NULL, NULL)
         `).run(
           newId,
           customerName.trim(),
-          customerPhone.trim(),
-          customerAddress ? customerAddress.trim() : 'Narela Hub Hub (Takeaway)',
+          cleanPhone,
+          isTakeaway ? 'Narela Hub (Takeaway)' : customerAddress.trim(),
           isTakeaway ? 'Takeaway' : 'Home Delivery',
           paymentMode || 'Cash on Delivery',
           specialInstruction ? specialInstruction.trim() : '',
@@ -331,23 +370,25 @@ export const server = http.createServer(async (req, res) => {
           orderType: isTakeaway ? 'Takeaway' : 'Home Delivery',
           paymentMode: paymentMode || 'Cash on Delivery',
           customerName: customerName.trim(),
-          customerPhone: customerPhone.trim(),
-          customerAddressOrTable: customerAddress || 'Narela Hub',
+          customerPhone: cleanPhone,
+          customerAddressOrTable: isTakeaway ? 'Narela Hub (Takeaway)' : customerAddress.trim(),
           specialInstruction: specialInstruction || '',
           subtotal: calculatedSubtotal,
           deliveryFee,
           total: grandTotal,
+          deliveryPartnerName: '',
+          deliveryPartnerPhone: '',
           items: validatedItems,
         };
 
         return sendJSON(res, 201, { success: true, order: createdOrder });
       }
 
-      // 4d. Update Order Status (Admin action: Accept, Mark Ready, Dispatch, Complete, Decline)
+      // 4d. Update Order Status & Assign Delivery Partner
       if (pathname.match(/^\/api\/orders\/[^/]+\/status$/) && (method === 'PATCH' || method === 'PUT')) {
         const orderId = decodeURIComponent(pathname.split('/')[3]);
         const body = await parseJSONBody(req);
-        const { status, declineReason, prepTime } = body;
+        const { status, declineReason, prepTime, deliveryPartnerName, deliveryPartnerPhone } = body;
 
         const existing = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
         if (!existing) {
@@ -360,16 +401,32 @@ export const server = http.createServer(async (req, res) => {
           completedAt = `Completed at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
         }
 
+        const partnerName = deliveryPartnerName !== undefined ? deliveryPartnerName : existing.delivery_partner_name;
+        const partnerPhone = deliveryPartnerPhone !== undefined ? deliveryPartnerPhone : existing.delivery_partner_phone;
+
         db.prepare(`
           UPDATE orders
-          SET status = ?, decline_reason = COALESCE(?, decline_reason), prep_time = COALESCE(?, prep_time), completed_at = ?
+          SET status = ?,
+              decline_reason = COALESCE(?, decline_reason),
+              prep_time = COALESCE(?, prep_time),
+              completed_at = ?,
+              delivery_partner_name = ?,
+              delivery_partner_phone = ?
           WHERE id = ?
-        `).run(status, declineReason || null, prepTime || null, completedAt, orderId);
+        `).run(status, declineReason || null, prepTime || null, completedAt, partnerName, partnerPhone, orderId);
 
         const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
         const items = db.prepare('SELECT name, price, quantity, image FROM order_items WHERE order_id = ?').all(orderId);
 
-        return sendJSON(res, 200, { success: true, order: { ...updated, items } });
+        return sendJSON(res, 200, {
+          success: true,
+          order: {
+            ...updated,
+            deliveryPartnerName: updated.delivery_partner_name || '',
+            deliveryPartnerPhone: updated.delivery_partner_phone || '',
+            items,
+          },
+        });
       }
 
       // 5. Customer Profile
@@ -421,6 +478,162 @@ export const server = http.createServer(async (req, res) => {
         const addrId = pathname.replace('/api/addresses/', '');
         db.prepare('DELETE FROM customer_addresses WHERE id = ?').run(addrId);
         return sendJSON(res, 200, { success: true });
+      }
+
+      // 7. Banners (Homepage Slider Management)
+      if (pathname === '/api/banners') {
+        if (method === 'GET') {
+          const rows = db.prepare('SELECT * FROM banners ORDER BY display_order ASC, ROWID ASC').all();
+          const banners = rows.map((b) => ({
+            id: b.id,
+            title: b.title,
+            subtitle: b.subtitle || '',
+            imageDesktop: b.image_desktop,
+            imageMobile: b.image_mobile || b.image_desktop,
+            linkUrl: b.link_url || '#menu',
+            isActive: Boolean(b.is_active),
+            displayOrder: Number(b.display_order) || 0,
+          }));
+          return sendJSON(res, 200, banners);
+        }
+
+        if (method === 'POST') {
+          const body = await parseJSONBody(req);
+          const id = `banner-${Date.now()}`;
+          const isActive = body.isActive === false ? 0 : 1;
+          const displayOrder = Number(body.displayOrder) || 1;
+
+          db.prepare(`
+            INSERT INTO banners (id, title, subtitle, image_desktop, image_mobile, link_url, is_active, display_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            id,
+            body.title || 'Greenwood Café & Restaurant',
+            body.subtitle || '',
+            body.imageDesktop || '/images/hero-bg-2400.jpg',
+            body.imageMobile || body.imageDesktop || '/images/hero-bg-mobile-1200.jpg',
+            body.linkUrl || '#menu',
+            isActive,
+            displayOrder
+          );
+
+          const created = db.prepare('SELECT * FROM banners WHERE id = ?').get(id);
+          return sendJSON(res, 201, {
+            success: true,
+            banner: {
+              id: created.id,
+              title: created.title,
+              subtitle: created.subtitle,
+              imageDesktop: created.image_desktop,
+              imageMobile: created.image_mobile,
+              linkUrl: created.link_url,
+              isActive: Boolean(created.is_active),
+              displayOrder: Number(created.display_order),
+            },
+          });
+        }
+      }
+
+      if (pathname.startsWith('/api/banners/') && (method === 'PATCH' || method === 'PUT')) {
+        const bannerId = pathname.replace('/api/banners/', '');
+        const body = await parseJSONBody(req);
+
+        const current = db.prepare('SELECT * FROM banners WHERE id = ?').get(bannerId);
+        if (!current) {
+          return sendJSON(res, 404, { error: 'Banner not found' });
+        }
+
+        const title = body.title !== undefined ? body.title : current.title;
+        const subtitle = body.subtitle !== undefined ? body.subtitle : current.subtitle;
+        const imageDesktop = body.imageDesktop !== undefined ? body.imageDesktop : current.image_desktop;
+        const imageMobile = body.imageMobile !== undefined ? body.imageMobile : current.image_mobile;
+        const linkUrl = body.linkUrl !== undefined ? body.linkUrl : current.link_url;
+        const isActive = body.isActive !== undefined ? (body.isActive ? 1 : 0) : current.is_active;
+        const displayOrder = body.displayOrder !== undefined ? Number(body.displayOrder) : current.display_order;
+
+        db.prepare(`
+          UPDATE banners
+          SET title = ?, subtitle = ?, image_desktop = ?, image_mobile = ?, link_url = ?, is_active = ?, display_order = ?
+          WHERE id = ?
+        `).run(title, subtitle, imageDesktop, imageMobile, linkUrl, isActive, displayOrder, bannerId);
+
+        const updated = db.prepare('SELECT * FROM banners WHERE id = ?').get(bannerId);
+        return sendJSON(res, 200, {
+          success: true,
+          banner: {
+            id: updated.id,
+            title: updated.title,
+            subtitle: updated.subtitle,
+            imageDesktop: updated.image_desktop,
+            imageMobile: updated.image_mobile,
+            linkUrl: updated.link_url,
+            isActive: Boolean(updated.is_active),
+            displayOrder: Number(updated.display_order),
+          },
+        });
+      }
+
+      if (pathname.startsWith('/api/banners/') && method === 'DELETE') {
+        const bannerId = pathname.replace('/api/banners/', '');
+        db.prepare('DELETE FROM banners WHERE id = ?').run(bannerId);
+        return sendJSON(res, 200, { success: true });
+      }
+
+      // 8. Admin Security & Authorized Phones Management
+      if (pathname === '/api/admin/verify' && method === 'POST') {
+        const body = await parseJSONBody(req);
+        const cleanPhone = String(body.phone || '').replace(/\D/g, '').slice(-10);
+
+        const row = db.prepare("SELECT value FROM settings WHERE key = 'admin_phones'").get();
+        let authorizedPhones = ['8802325537'];
+        if (row && row.value) {
+          try {
+            authorizedPhones = JSON.parse(row.value);
+          } catch {}
+        }
+
+        const isAuth = authorizedPhones.some((p) => String(p).replace(/\D/g, '').slice(-10) === cleanPhone);
+        if (isAuth) {
+          return sendJSON(res, 200, { authorized: true, phone: cleanPhone, role: 'admin' });
+        } else {
+          return sendJSON(res, 403, {
+            authorized: false,
+            error: 'This mobile number is not authorized to access Greenwood Admin Panel.',
+          });
+        }
+      }
+
+      if (pathname === '/api/settings/admins') {
+        if (method === 'GET') {
+          const row = db.prepare("SELECT value FROM settings WHERE key = 'admin_phones'").get();
+          let authorizedPhones = ['8802325537'];
+          if (row && row.value) {
+            try {
+              authorizedPhones = JSON.parse(row.value);
+            } catch {}
+          }
+          return sendJSON(res, 200, { admins: authorizedPhones });
+        }
+
+        if (method === 'POST') {
+          const body = await parseJSONBody(req);
+          if (!Array.isArray(body.admins)) {
+            return sendJSON(res, 400, { error: 'admins array is required' });
+          }
+          const cleanAdmins = body.admins
+            .map((p) => String(p).replace(/\D/g, '').slice(-10))
+            .filter((p) => p.length === 10);
+
+          // Always ensure the primary owner admin 8802325537 is retained
+          if (!cleanAdmins.includes('8802325537')) {
+            cleanAdmins.unshift('8802325537');
+          }
+
+          db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('admin_phones', ?)").run(
+            JSON.stringify(cleanAdmins)
+          );
+          return sendJSON(res, 200, { success: true, admins: cleanAdmins });
+        }
       }
 
       // Fallback for unknown /api route
