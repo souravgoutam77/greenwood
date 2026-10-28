@@ -33,8 +33,8 @@ async function push() {
       console.log(`[GIT PROGRESS] ${progress.phase}: ${progress.loaded} / ${progress.total || '?'}`);
     },
     onAuth: () => ({
-      username: token,
-      password: '',
+      username: 'souravgoutam77',
+      password: token,
     }),
   });
 
