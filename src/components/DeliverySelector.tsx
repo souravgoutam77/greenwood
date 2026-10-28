@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RESTAURANT_DATA } from '../data/restaurantData';
 
 interface DeliverySelectorProps {
   selectedHub: string;
@@ -78,11 +77,6 @@ export const DeliverySelector: React.FC<DeliverySelectorProps> = ({
               </svg>
             </button>
           </div>
-
-          {/* Pale Botanical Green Max 15km Badge */}
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-[#DCE8CB] text-[#163E26] border border-[#C5D8AE] shadow-2xs whitespace-nowrap shrink-0">
-            {RESTAURANT_DATA.delivery.radiusBadge}
-          </span>
 
           {/* Dropdown Menu for Location Hubs — 100% Solid Opaque Background */}
           {dropdownOpen && (

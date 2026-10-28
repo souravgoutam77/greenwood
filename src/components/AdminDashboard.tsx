@@ -61,6 +61,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Navigation State — strictly the 5 core sections
   const [activeSection, setActiveSection] = useState<'Dashboard' | 'Live Orders' | 'Menu Items' | 'Order History' | 'Settings'>('Dashboard');
+  const [dashboardTimeframe, setDashboardTimeframe] = useState<'Today' | 'This Week' | 'This Month'>('Today');
   
   // Live / Pending Orders Filter & Search
   const [activeTab, setActiveTab] = useState<'All' | 'New' | 'Preparing' | 'Out for Delivery' | 'Completed'>('All');
@@ -69,7 +70,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Menu Items Filter & Search
   const [menuCategoryFilter, setMenuCategoryFilter] = useState<string>('All');
+  const [menuTagFilter, setMenuTagFilter] = useState<'All' | 'Trending' | 'In Stock' | 'Sold Out'>('All');
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
+
+  // Image Upload & Client Compression States (Item 13)
+  const [compressingImage, setCompressingImage] = useState(false);
+  const [compressedSizeInfo, setCompressedSizeInfo] = useState<string | null>(null);
+
+  // Social Reels State (Item 23)
+  const [socialReels, setSocialReels] = useState<Array<{ id: string; image: string; reelUrl: string; alt: string }>>(() => {
+    try {
+      const saved = localStorage.getItem('greenwood_social_reels');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: "soc-1",
+          image: "/images/instagram/reel-real-1.jpg",
+          reelUrl: "https://www.instagram.com/greenwoodcafeindia/reel/DMxlW8OyfW9/",
+          alt: "Greenwood Cafe signature chef culinary creation reel",
+        },
+        {
+          id: "soc-2",
+          image: "/images/instagram/reel-real-2.jpg",
+          reelUrl: "https://www.instagram.com/greenwoodcafeindia/reel/DNBhS7qyf88/",
+          alt: "Greenwood Cafe refreshing handcrafted mocktail & beverage reel",
+        },
+        {
+          id: "soc-3",
+          image: "/images/instagram/reel-real-3.jpg",
+          reelUrl: "https://www.instagram.com/greenwoodcafeindia/reel/DNJ2T3ly7qA/",
+          alt: "Greenwood Cafe dining experience & botanical ambiance reel",
+        },
+        {
+          id: "soc-4",
+          image: "/images/instagram/reel-real-4.jpg",
+          reelUrl: "https://www.instagram.com/greenwoodcafeindia/reel/DNRE_8vy6yq/",
+          alt: "Greenwood Cafe artisanal tandoor & sizzling platter reel",
+        },
+        {
+          id: "soc-5",
+          image: "/images/instagram/reel-real-5.jpg",
+          reelUrl: "https://www.instagram.com/greenwoodcafeindia/reel/DNYuX8qy01b/",
+          alt: "Greenwood Cafe weekend botanical garden vibes reel",
+        },
+      ];
+    } catch {
+      return [];
+    }
+  });
+  const [newReelUrl, setNewReelUrl] = useState('');
+  const [newReelTitle, setNewReelTitle] = useState('');
+  const [newReelThumbnail, setNewReelThumbnail] = useState('/images/instagram/reel-real-1.jpg');
 
   // History Filter & Search
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -596,6 +646,97 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  // Canvas-based Client Image Compression (Item 13)
+  const compressImageFile = (file: File, maxWidth = 800, maxHeight = 800, quality = 0.82): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(event.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setCompressingImage(true);
+      const originalKb = Math.round(file.size / 1024);
+      const compressed = await compressImageFile(file);
+      const compressedKb = Math.round((compressed.length * 3) / 4 / 1024);
+      setCompressedSizeInfo(`Optimized: ${originalKb} KB → ~${compressedKb} KB (Web Ready)`);
+      if (isEdit) {
+        setEditDishForm((prev) => ({ ...prev, image: compressed }));
+      } else {
+        setNewDishForm((prev) => ({ ...prev, image: compressed }));
+      }
+    } catch (err) {
+      console.error('Image compression failed:', err);
+      showToast('Failed to optimize image. Please try again.');
+    } finally {
+      setCompressingImage(false);
+    }
+  };
+
+  // Social Reels Management (Item 23)
+  const handleSaveReels = (reels: Array<{ id: string; image: string; reelUrl: string; alt: string }>) => {
+    setSocialReels(reels);
+    localStorage.setItem('greenwood_social_reels', JSON.stringify(reels));
+    window.dispatchEvent(new Event('greenwood_reels_updated'));
+    showToast('Social video reels updated successfully!');
+  };
+
+  const handleAddReel = () => {
+    if (!newReelUrl.trim()) {
+      showToast('Please enter an Instagram reel URL.');
+      return;
+    }
+    const newReel = {
+      id: `soc-${Date.now()}`,
+      image: newReelThumbnail.trim() || '/images/instagram/reel-real-1.jpg',
+      reelUrl: newReelUrl.trim(),
+      alt: newReelTitle.trim() || 'Greenwood Cafe Instagram Reel',
+    };
+    const updated = [...socialReels, newReel];
+    handleSaveReels(updated);
+    setNewReelUrl('');
+    setNewReelTitle('');
+    setNewReelThumbnail('/images/instagram/reel-real-1.jpg');
+  };
+
+  const handleDeleteReel = (id: string) => {
+    const updated = socialReels.filter((r) => r.id !== id);
+    handleSaveReels(updated);
+  };
+
   const handleToggleBannerActive = async (bannerId: string) => {
     let nextState = true;
     setBanners((prev) =>
@@ -718,7 +859,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const preparingOrdersCount = orders.filter((o) => o.status === 'Preparing').length;
   const readyOrdersCount = orders.filter((o) => o.status === 'Out for Delivery').length;
   const completedOrdersCount = orders.filter((o) => o.status === 'Completed').length;
-  const declinedOrdersCount = orders.filter((o) => o.status === 'Declined').length;
+  const _declinedOrdersCount = orders.filter((o) => o.status === 'Declined').length;
+  void _declinedOrdersCount;
 
   // Filtered Live Orders
   const filteredOrders = orders.filter((o) => {
@@ -742,9 +884,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return b.id.localeCompare(a.id);
   });
 
-  // Filtered Menu Items
+  // Filtered Menu Items (Supports Category & Trending/Stock Tagging)
   const filteredMenuItems = menuItems.filter((item) => {
     if (menuCategoryFilter !== 'All' && item.category !== menuCategoryFilter) return false;
+    if (menuTagFilter === 'Trending' && !item.isTrending) return false;
+    if (menuTagFilter === 'In Stock' && !item.inStock) return false;
+    if (menuTagFilter === 'Sold Out' && item.inStock) return false;
     if (menuSearchQuery.trim()) {
       const q = menuSearchQuery.toLowerCase().trim();
       return item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
@@ -808,14 +953,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   maxLength={10}
                   value={adminLoginPhone}
                   onChange={(e) => setAdminLoginPhone(e.target.value.replace(/\D/g, ''))}
-                  placeholder="8802325537"
+                  placeholder="Enter 10-digit mobile"
                   className="w-full px-3.5 py-2.5 bg-[#FAF6EE] border border-[#E8DDCA] rounded-r-xl text-sm text-[#17261D] font-medium font-sans focus:outline-none focus:border-[#163E26]"
                   autoFocus
                 />
               </div>
-              <p className="text-[11px] text-[#77766D] mt-1.5 font-sans">
-                Authorized Admin: <strong className="text-[#163E26]">8802325537</strong>
-              </p>
             </div>
 
             <button
@@ -1076,270 +1218,182 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="max-w-7xl mx-auto space-y-5">
             
             {/* ======================================================= */}
-            {/* 1. DASHBOARD VIEW                                       */}
+            {/* 1. DASHBOARD PERFORMANCE VIEW (Today, Week, Month)       */}
             {/* ======================================================= */}
             {activeSection === 'Dashboard' && (
               <div className="space-y-5">
                 
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                {/* Header with Timeframe Tabs */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#17261D] tracking-tight">
-                      Kitchen Dashboard
+                      Performance Reports
                     </h1>
                     <p className="font-sans text-xs sm:text-sm text-[#77766D] mt-0.5">
-                      Live restaurant operations & kitchen summary.
+                      Executive operational summary &amp; sales analytics for Greenwood Café.
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveSection('Live Orders')}
-                    className="inline-flex items-center gap-1.5 self-start sm:self-auto bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors cursor-pointer shadow-xs"
-                  >
-                    <span>View Pending Orders ({activeOrdersCount})</span>
-                    <span className="text-[#C9A45C]">→</span>
-                  </button>
+                  {/* Timeframe Selector Tabs */}
+                  <div className="flex items-center gap-1.5 bg-[#FAF6EE] p-1 rounded-xl border border-[#E8DDCA] self-start sm:self-auto shadow-2xs">
+                    {(['Today', 'This Week', 'This Month'] as const).map((tf) => (
+                      <button
+                        key={tf}
+                        type="button"
+                        onClick={() => setDashboardTimeframe(tf)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          dashboardTimeframe === tf
+                            ? 'bg-[#163E26] text-white shadow-xs'
+                            : 'text-[#4B5149] hover:bg-[#E8DDCA]/50'
+                        }`}
+                      >
+                        {tf}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* 4 Compact Uniform KPI Cards */}
+                {/* 4 Core Metric Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {/* KPI 1 */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-3.5 sm:p-4 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-0.5">Today's Orders</span>
-                      <div className="font-sans text-xl sm:text-2xl font-bold text-[#17261D]">38</div>
-                      <div className="flex items-center gap-1 mt-1 text-[10px] sm:text-[11px]">
-                        <span className="text-[#168039] font-bold">{newOrdersCount} New</span>
-                        <span className="text-[#9A9488]">•</span>
-                        <span className="text-[#77766D]">{completedOrdersCount} Done</span>
-                        {declinedOrdersCount > 0 && (
-                          <>
-                            <span className="text-[#9A9488]">•</span>
-                            <span className="text-[#C83A25] font-semibold">{declinedOrdersCount} Cancelled</span>
-                          </>
-                        )}
+                  {/* Revenue */}
+                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                      {dashboardTimeframe} Revenue
+                    </span>
+                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                      {dashboardTimeframe === 'Today' ? '₹18,450' : dashboardTimeframe === 'This Week' ? '₹1,24,680' : '₹5,48,920'}
+                    </div>
+                    <span className="inline-flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] font-bold text-[#168039] bg-[#DCE8CB] px-2 py-0.5 rounded-full">
+                      ↑ {dashboardTimeframe === 'Today' ? '14% vs yesterday' : dashboardTimeframe === 'This Week' ? '9.4% vs last week' : '18.2% vs last month'}
+                    </span>
+                  </div>
+
+                  {/* Orders */}
+                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                      {dashboardTimeframe} Orders
+                    </span>
+                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                      {dashboardTimeframe === 'Today' ? '38' : dashboardTimeframe === 'This Week' ? '264' : '1,142'}
+                    </div>
+                    <div className="flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] text-[#77766D]">
+                      <span className="text-[#168039] font-bold">{dashboardTimeframe === 'Today' ? '34 Delivered' : dashboardTimeframe === 'This Week' ? '248 Delivered' : '1,080 Delivered'}</span>
+                      <span>•</span>
+                      <span>{dashboardTimeframe === 'Today' ? `${newOrdersCount} Live` : '16 Live'}</span>
+                    </div>
+                  </div>
+
+                  {/* Average Ticket Size / AOV */}
+                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                      Average Order Value (AOV)
+                    </span>
+                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                      {dashboardTimeframe === 'Today' ? '₹485' : dashboardTimeframe === 'This Week' ? '₹472' : '₹480'}
+                    </div>
+                    <span className="text-[10px] sm:text-[11px] text-[#77766D] block mt-2">
+                      Healthy Pure Veg basket size
+                    </span>
+                  </div>
+
+                  {/* Fulfillment Performance */}
+                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                      Kitchen Fulfillment Speed
+                    </span>
+                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                      {avgKitchenPrepTime}
+                    </div>
+                    <span className="text-[10px] sm:text-[11px] text-[#168039] font-bold block mt-2">
+                      Avg door delivery: 24 mins
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2-Column Performance Breakdown */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                  {/* Category Breakdown */}
+                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 sm:p-5 shadow-xs space-y-3">
+                    <h2 className="font-serif text-base font-bold text-[#17261D] border-b border-[#E8DDCA]/60 pb-2 flex items-center justify-between">
+                      <span>Pure Vegetarian Category Share</span>
+                      <span className="text-xs font-sans font-medium text-[#77766D]">100% Pure Veg</span>
+                    </h2>
+                    <div className="space-y-2.5 text-xs">
+                      <div>
+                        <div className="flex justify-between font-semibold text-[#17261D] mb-1">
+                          <span>North Indian Curries (Paneer Butter Masala, Dal Makhani)</span>
+                          <span className="text-[#163E26]">48%</span>
+                        </div>
+                        <div className="w-full bg-[#FAF6EE] h-2 rounded-full overflow-hidden border border-[#E8DDCA]/60">
+                          <div className="bg-[#163E26] h-full rounded-full" style={{ width: '48%' }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between font-semibold text-[#17261D] mb-1">
+                          <span>Fresh Tandoori Breads &amp; Biryani</span>
+                          <span className="text-[#163E26]">26%</span>
+                        </div>
+                        <div className="w-full bg-[#FAF6EE] h-2 rounded-full overflow-hidden border border-[#E8DDCA]/60">
+                          <div className="bg-[#8F5D2C] h-full rounded-full" style={{ width: '26%' }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between font-semibold text-[#17261D] mb-1">
+                          <span>Starters &amp; Platter Specialties</span>
+                          <span className="text-[#163E26]">14%</span>
+                        </div>
+                        <div className="w-full bg-[#FAF6EE] h-2 rounded-full overflow-hidden border border-[#E8DDCA]/60">
+                          <div className="bg-[#C9A45C] h-full rounded-full" style={{ width: '14%' }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between font-semibold text-[#17261D] mb-1">
+                          <span>Beverages &amp; Desserts (Lassi, Gulab Jamun)</span>
+                          <span className="text-[#163E26]">12%</span>
+                        </div>
+                        <div className="w-full bg-[#FAF6EE] h-2 rounded-full overflow-hidden border border-[#E8DDCA]/60">
+                          <div className="bg-[#C83A25] h-full rounded-full" style={{ width: '12%' }} />
+                        </div>
                       </div>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-[#FAF6EE] border border-[#E8DDCA] flex items-center justify-center text-[#8F5D2C] shrink-0">
-                      <svg className="w-5 h-5 text-[#8F5D2C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                    </div>
                   </div>
 
-                  {/* KPI 2 */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-3.5 sm:p-4 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-0.5">Today's Revenue</span>
-                      <div className="font-sans text-xl sm:text-2xl font-bold text-[#17261D]">₹18,450</div>
-                      <span className="inline-block mt-1 text-[10px] sm:text-[11px] font-semibold text-[#168039] bg-[#DCE8CB] px-2 py-0.5 rounded-full">
-                        ↑ 14% vs yesterday
-                      </span>
+                  {/* Channel Mix & Operational Shortcuts */}
+                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 sm:p-5 shadow-xs space-y-3">
+                    <h2 className="font-serif text-base font-bold text-[#17261D] border-b border-[#E8DDCA]/60 pb-2">
+                      Fulfillment Channels &amp; Quick Navigation
+                    </h2>
+                    
+                    <div className="grid grid-cols-2 gap-3 text-center py-1">
+                      <div className="p-3 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA]">
+                        <span className="text-[11px] text-[#77766D] font-medium block">Home Delivery</span>
+                        <span className="text-xl font-sans font-bold text-[#163E26]">68%</span>
+                        <span className="text-[10px] text-[#77766D] block mt-0.5">Within 15km Hub Zone</span>
+                      </div>
+                      <div className="p-3 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA]">
+                        <span className="text-[11px] text-[#77766D] font-medium block">Takeaway &amp; Dine-in</span>
+                        <span className="text-xl font-sans font-bold text-[#8F5D2C]">32%</span>
+                        <span className="text-[10px] text-[#77766D] block mt-0.5">Pickup at Narela Counter</span>
+                      </div>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-[#FAF6EE] border border-[#E8DDCA] flex items-center justify-center text-[#C9A45C] shrink-0">
-                      <svg className="w-5 h-5 text-[#C9A45C]" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-                        <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
 
-                  {/* KPI 3 */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-3.5 sm:p-4 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-0.5">Avg. Prep Time</span>
-                      <div className="font-sans text-xl sm:text-2xl font-bold text-[#17261D]">{avgKitchenPrepTime}</div>
-                      <span className="inline-block mt-1 text-[10px] sm:text-[11px] font-semibold text-[#168039] bg-[#DCE8CB] px-2 py-0.5 rounded-full">
-                        ↓ 12% vs yesterday
-                      </span>
-                    </div>
-                    <div className="w-10 h-10 rounded-full bg-[#FAF6EE] border border-[#E8DDCA] flex items-center justify-center text-[#C9A45C] shrink-0">
-                      <svg className="w-5 h-5 text-[#C9A45C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                        <circle cx="12" cy="12" r="9" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* KPI 4 */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-3.5 sm:p-4 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-0.5">Pending Delivery</span>
-                      <div className="font-sans text-xl sm:text-2xl font-bold text-[#17261D]">{readyOrdersCount}</div>
-                      <span className="text-[10px] sm:text-[11px] text-[#77766D] block mt-1">On the way to customers</span>
-                    </div>
-                    <div className="w-10 h-10 rounded-full bg-[#FAF6EE] border border-[#E8DDCA] flex items-center justify-center text-[#8F5D2C] shrink-0">
-                      <svg className="w-5 h-5 text-[#8F5D2C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                        <circle cx="5" cy="17" r="3" />
-                        <circle cx="19" cy="17" r="3" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 17h4l3-6h5l2 3h2M9 11h3" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2-Column Split: Orders Preview + Quick Stock */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                  {/* Left: Orders Needing Attention */}
-                  <div className="lg:col-span-2 space-y-3.5">
-                    <div className="flex items-center justify-between">
-                      <h2 className="font-serif text-base sm:text-lg font-bold text-[#17261D] flex items-center gap-2">
-                        <span>Pending Orders Requiring Action</span>
-                        <span className="bg-[#C83A25] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                          {orders.filter((o) => o.status === 'New' || o.status === 'Preparing').length} Active
-                        </span>
-                      </h2>
+                    <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setActiveSection('Live Orders')}
-                        className="text-xs font-semibold text-[#163E26] hover:text-[#C9A45C]"
+                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                       >
-                        All Orders →
+                        <span>Manage Live Orders ({activeOrdersCount})</span>
+                        <span>→</span>
                       </button>
-                    </div>
-
-                    {orders
-                      .filter((o) => o.status === 'New' || o.status === 'Preparing')
-                      .slice(0, 3)
-                      .map((order) => {
-                        const isNew = order.status === 'New';
-                        return (
-                          <div
-                            key={order.id}
-                            className={`bg-[#FFFDF8] rounded-xl border p-4 shadow-xs ${
-                              isNew ? 'border-[#C9A45C] ring-1 ring-[#C9A45C]/40' : 'border-[#E8DDCA]'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                                  isNew
-                                    ? 'bg-[#FDF3D8] text-[#8F5D2C] border border-[#E8D094]'
-                                    : 'bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]'
-                                }`}>
-                                  {isNew ? '★ NEW ORDER' : '🍳 PREPARING'}
-                                </span>
-                                <span className="font-bold text-xs text-[#17261D]">{order.id}</span>
-                              </div>
-                              <span className="text-[11px] text-[#77766D]">{order.placedTime}</span>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#E8DDCA]/60 text-xs">
-                              <div>
-                                <div className="font-bold text-[#17261D]">{order.customerName}</div>
-                                <div className="text-[#77766D]">{order.customerPhone}</div>
-                                <div className="text-[#163E26] font-medium mt-0.5">{order.orderType} • {order.paymentMode}</div>
-                              </div>
-
-                              <div className="space-y-1">
-                                {order.items.map((it, idx) => (
-                                  <div key={idx} className="flex justify-between text-[11px]">
-                                    <span className="truncate">{it.quantity} × {it.name}</span>
-                                    <span className="font-semibold text-[#17261D]">₹{it.price}</span>
-                                  </div>
-                                ))}
-                              </div>
-
-                              <div className="flex flex-col justify-between items-end gap-2">
-                                <div className="font-sans text-base font-bold text-[#C83A25]">
-                                  ₹{order.total}
-                                </div>
-                                <div className="flex gap-2 w-full justify-end">
-                                  {isNew ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleAcceptOrder(order.id)}
-                                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xs cursor-pointer"
-                                      >
-                                        Accept
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setActiveModal({ type: 'decline', title: `Decline ${order.id}?`, order })}
-                                        className="text-[#C83A25] border border-[#C83A25] text-xs font-semibold px-2.5 py-1.5 rounded-lg cursor-pointer"
-                                      >
-                                        Decline
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleMarkReady(order.id)}
-                                      className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xs cursor-pointer"
-                                    >
-                                      Mark Ready
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-
-                  {/* Right: Quick Dish Stock */}
-                  <div className="space-y-4">
-                    <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
-                      <h3 className="font-serif text-sm sm:text-base font-bold text-[#17261D] mb-1">
-                        Quick Dish Availability
-                      </h3>
-                      <p className="text-[11px] text-[#77766D] mb-3">
-                        Instant 1-tap stock switch for popular dishes.
-                      </p>
-
-                      <div className="divide-y divide-[#E8DDCA]/70">
-                        {menuItems.slice(0, 5).map((item) => (
-                          <div key={item.id} className="py-2 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className="w-8 h-8 rounded-lg object-cover border border-[#E8DDCA] shrink-0"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = '/images/dish-detail/rec-dal-makhani.jpg';
-                                }}
-                              />
-                              <div className="min-w-0">
-                                <span className="text-xs font-semibold text-[#17261D] block truncate">
-                                  {item.name}
-                                </span>
-                                <span className={`text-[10px] font-bold ${item.inStock ? 'text-[#168039]' : 'text-[#C83A25]'}`}>
-                                  {item.inStock ? '● In Stock' : '● Sold Out'}
-                                </span>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={item.inStock}
-                              onClick={() => handleToggleMenuAvailability(item.id)}
-                              className={`w-9 h-5 rounded-full relative shrink-0 p-0.5 cursor-pointer ${
-                                item.inStock ? 'bg-[#163E26]' : 'bg-[#E0D8CB]'
-                              }`}
-                            >
-                              <span
-                                className={`block w-4 h-4 rounded-full bg-white shadow-xs transform transition-transform ${
-                                  item.inStock ? 'translate-x-4' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="pt-3 border-t border-[#E8DDCA]/60 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setActiveSection('Menu Items')}
-                          className="text-xs font-semibold text-[#163E26] hover:text-[#C9A45C]"
-                        >
-                          View Full Menu ({menuItems.length} items) →
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection('Menu Items')}
+                        className="bg-[#FAF6EE] hover:bg-[#E8DDCA] text-[#2B180F] border border-[#C9A45C]/50 text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Manage Menu Dishes ({menuItems.length})</span>
+                        <span>→</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1364,14 +1418,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </p>
                   </div>
 
-                  <span className="bg-[#163E26] text-[#FAF6EE] text-xs font-bold px-3 py-1 rounded-full self-start sm:self-auto">
-                    {activeOrdersCount} Pending Action
-                  </span>
+                  {activeOrdersCount > 0 && (
+                    <span className="bg-[#163E26] text-[#FAF6EE] text-xs font-bold px-3 py-1 rounded-full self-start sm:self-auto animate-pulse">
+                      {activeOrdersCount} Pending Action
+                    </span>
+                  )}
                 </div>
 
                 {/* Filter Tabs & Search Bar */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
-                  {/* Status Pills */}
+                  {/* Status Pills with Color-Coded Indicators */}
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
                     {(['All', 'New', 'Preparing', 'Out for Delivery', 'Completed'] as const).map((tab) => {
                       const isSelected = activeTab === tab;
@@ -1391,15 +1447,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           key={tab}
                           type="button"
                           onClick={() => setActiveTab(tab)}
-                          className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
+                          className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-colors ${
                             isSelected
                               ? 'bg-[#163E26] text-white shadow-xs'
                               : 'bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#4B5149] border border-[#E8DDCA]'
                           }`}
                         >
+                          {tab === 'New' && <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />}
+                          {tab === 'Preparing' && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+                          {tab === 'Out for Delivery' && <span className="w-2 h-2 rounded-full bg-yellow-500" />}
+                          {tab === 'Completed' && <span className="w-2 h-2 rounded-full bg-emerald-600" />}
                           <span>{tab === 'All' ? 'All Orders' : tab}</span>
-                          <span className="ml-1 opacity-80">({count})</span>
-                          {tab === 'New' && count > 0 && <span className="ml-1 text-[#C83A25]">●</span>}
+                          <span className="opacity-80">({count})</span>
                         </button>
                       );
                     })}
@@ -1426,8 +1485,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Orders List */}
-                <div className="space-y-3.5">
+                {/* Orders List (Compact, Whitespace-Optimized Layout) */}
+                <div className="space-y-3">
                   {filteredOrders.length === 0 ? (
                     <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-8 text-center text-[#77766D]">
                       <p className="text-sm font-bold text-[#17261D]">No orders found for this filter.</p>
@@ -1444,114 +1503,131 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       return (
                         <div
                           key={order.id}
-                          className={`bg-[#FFFDF8] rounded-xl border p-4 sm:p-5 shadow-xs ${
-                            isNew ? 'border-[#C9A45C] ring-1 ring-[#C9A45C]/50' : 'border-[#E8DDCA]'
+                          className={`bg-[#FFFDF8] rounded-xl border p-3 sm:p-3.5 shadow-xs transition-shadow ${
+                            isNew
+                              ? 'border-red-300 ring-1 ring-red-300/60'
+                              : isPreparing
+                              ? 'border-amber-200'
+                              : isDelivery
+                              ? 'border-yellow-300'
+                              : 'border-[#E8DDCA]'
                           }`}
                         >
                           {/* Top Meta Bar */}
-                          <div className="flex items-center justify-between gap-2 mb-3">
-                            <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[#E8DDCA]/50 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Color-coded Status Badges (Red: New, Light Yellow: Preparing, Yellow: Out for Delivery, Green: Completed) */}
                               {isNew && (
-                                <span className="bg-[#FDF3D8] text-[#8F5D2C] border border-[#E8D094] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                <span className="bg-red-100 text-red-800 border border-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-sans">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
                                   ★ NEW ORDER
                                 </span>
                               )}
                               {isPreparing && (
-                                <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                <span className="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-sans">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                                   🍳 PREPARING
                                 </span>
                               )}
                               {isDelivery && (
-                                <span className="bg-[#DCE8CB] text-[#163E26] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                <span className="bg-yellow-100 text-yellow-800 border border-yellow-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-sans">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
                                   🛵 OUT FOR DELIVERY
                                 </span>
                               )}
                               {isCompleted && (
-                                <span className="bg-[#F3F4F6] text-[#4B5563] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-sans">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                                   ✓ COMPLETED
                                 </span>
                               )}
                               {isDeclined && (
-                                <span className="bg-[#FEE2E2] text-[#991B1B] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                <span className="bg-gray-100 text-gray-700 border border-gray-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-sans">
                                   ✕ DECLINED
                                 </span>
                               )}
-                              <span className="font-bold text-sm text-[#17261D]">{order.id}</span>
+
+                              <span className="font-sans font-bold text-sm text-[#17261D]">{order.id}</span>
+                              <span className="text-[11px] font-semibold text-[#163E26] bg-[#FAF6EE] px-2 py-0.5 rounded border border-[#E8DDCA]">
+                                {order.orderType}
+                              </span>
                             </div>
 
-                            <div className="text-[11px] text-[#77766D]">
-                              {order.placedTime} {order.prepTime && `| ${order.prepTime}`}
+                            <div className="text-[11px] text-[#77766D] font-sans shrink-0">
+                              {order.placedTime} {order.prepTime && `• ${order.prepTime}`}
                             </div>
                           </div>
 
-                          {/* 3-Column Content */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-[#E8DDCA]/60 pt-3 text-xs">
+                          {/* 3-Column Compact Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
                             
-                            {/* Col 1: Customer Details */}
-                            <div className="space-y-1">
+                            {/* Col 1: Customer Details (4 cols) */}
+                            <div className="md:col-span-4 space-y-0.5">
                               <div className="font-bold text-sm text-[#17261D]">{order.customerName}</div>
-                              <div className="text-[#77766D]">{order.customerPhone}</div>
-                              <div className="text-[#4B5149] mt-0.5">{order.customerAddressOrTable}</div>
-                              <div className="text-[#163E26] font-semibold pt-1">
-                                {order.orderType} • {order.paymentMode}
+                              <div className="text-[#4B5149] font-mono text-[11px]">{order.customerPhone}</div>
+                              <div className="text-[#77766D] text-[11px] line-clamp-2">{order.customerAddressOrTable}</div>
+                              <div className="text-[#163E26] font-semibold text-[11px] pt-0.5">
+                                {order.paymentMode}
                               </div>
                             </div>
 
-                            {/* Col 2: Dishes List */}
-                            <div className="space-y-1.5 border-l-0 md:border-l md:border-r border-[#E8DDCA]/60 md:px-3">
-                              <span className="text-[10px] font-bold text-[#77766D] uppercase">
-                                Items ({order.items.reduce((s, i) => s + i.quantity, 0)})
-                              </span>
-                              {order.items.map((it, idx) => (
-                                <div key={idx} className="flex justify-between items-center text-xs">
-                                  <span className="font-medium text-[#17261D] truncate">{it.quantity} × {it.name}</span>
-                                  <span className="font-bold text-[#C83A25] shrink-0">₹{it.price}</span>
-                                </div>
-                              ))}
+                            {/* Col 2: Dishes List (5 cols) */}
+                            <div className="md:col-span-5 space-y-1 md:border-l md:border-r border-[#E8DDCA]/50 md:px-3">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-[#77766D] uppercase">
+                                <span>Items ({order.items.reduce((s, i) => s + i.quantity, 0)})</span>
+                              </div>
+                              <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
+                                {order.items.map((it, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs py-0.5">
+                                    <span className="font-medium text-[#17261D] truncate pr-2">{it.quantity} × {it.name}</span>
+                                    <span className="font-bold font-sans text-[#C83A25] shrink-0">₹{it.price}</span>
+                                  </div>
+                                ))}
+                              </div>
 
                               {order.specialInstruction && (
-                                <div className="mt-2 p-1.5 bg-[#FAF6EE] border border-[#E8DDCA] rounded text-[11px] text-[#8F5D2C]">
+                                <div className="mt-1 p-1 bg-[#FAF6EE] border border-[#E8DDCA] rounded text-[10px] text-[#8F5D2C]">
                                   <strong>Note:</strong> {order.specialInstruction}
                                 </div>
                               )}
                             </div>
 
-                            {/* Col 3: Total & Actions */}
-                            <div className="flex flex-col justify-between space-y-3 md:pl-2">
-                              <div>
-                                <span className="text-[11px] text-[#77766D]">Total Amount</span>
-                                <div className="font-sans text-xl font-bold text-[#C83A25]">
+                            {/* Col 3: Total & Actions (3 cols) */}
+                            <div className="md:col-span-3 flex flex-col justify-between space-y-2 md:pl-2">
+                              <div className="flex items-baseline justify-between md:block">
+                                <span className="text-[10px] text-[#77766D] uppercase font-bold block">Bill Total</span>
+                                <div className="font-sans text-lg font-bold text-[#C83A25]">
                                   ₹{order.total}
                                 </div>
                               </div>
 
-                              <div className="space-y-2">
+                              <div className="space-y-1.5">
                                 {isNew && (
                                   <>
                                     <button
                                       type="button"
                                       onClick={() => handleAcceptOrder(order.id)}
-                                      className="w-full bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                                      className="w-full bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1 shadow-xs cursor-pointer"
                                     >
-                                      <span>Accept & Send to Kitchen</span>
+                                      <span>Accept & Kitchen →</span>
                                     </button>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-1.5">
                                       <button
                                         type="button"
                                         onClick={() => {
                                           setDeclineReasonInput('');
                                           setActiveModal({ type: 'decline', title: `Decline Order ${order.id}?`, order });
                                         }}
-                                        className="text-[#C83A25] border border-[#C83A25] hover:bg-[#FFF5F3] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="text-[#C83A25] border border-[#C83A25] hover:bg-[#FFF5F3] text-[11px] font-medium py-1 rounded text-center cursor-pointer"
                                       >
                                         ✕ Decline
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setActiveModal({ type: 'kot', title: `Print KOT • ${order.id}`, order })}
-                                        className="bg-[#FAF6EE] hover:bg-[#E8DDCA] text-[#4B5149] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="bg-[#FAF6EE] hover:bg-[#E8DDCA] text-[#4B5149] text-[11px] font-medium py-1 rounded text-center cursor-pointer"
                                       >
-                                        🖨 Print KOT
+                                        🖨 KOT
                                       </button>
                                     </div>
                                   </>
@@ -1562,61 +1638,61 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleOpenDispatchModal(order)}
-                                      className="w-full bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold py-2 px-3 rounded-lg shadow-xs cursor-pointer"
+                                      className="w-full bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold py-1.5 px-2.5 rounded-lg shadow-xs cursor-pointer"
                                     >
                                       {order.orderType === 'Home Delivery' ? 'Assign Rider & Dispatch →' : 'Mark Ready for Pickup'}
                                     </button>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-1.5">
                                       <button
                                         type="button"
                                         onClick={() => setActiveModal({ type: 'details', title: `Order ${order.id} Details`, order })}
-                                        className="bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#4B5149] border border-[#E8DDCA] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#4B5149] border border-[#E8DDCA] text-[11px] font-medium py-1 rounded text-center cursor-pointer"
                                       >
-                                        View Details
+                                        Details
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setActiveModal({ type: 'kot', title: `Print KOT • ${order.id}`, order })}
-                                        className="bg-[#FAF6EE] hover:bg-[#E8DDCA] text-[#4B5149] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="bg-[#FAF6EE] hover:bg-[#E8DDCA] text-[#4B5149] text-[11px] font-medium py-1 rounded text-center cursor-pointer"
                                       >
-                                        🖨 Print KOT
+                                        🖨 KOT
                                       </button>
                                     </div>
                                   </>
                                 )}
 
                                 {isDelivery && (
-                                  <div className="space-y-2">
-                                    <div className="bg-[#DCE8CB] text-[#163E26] p-2 rounded-lg text-xs font-semibold">
-                                      <div className="flex items-center justify-between">
+                                  <div className="space-y-1.5">
+                                    <div className="bg-yellow-50 text-yellow-900 border border-yellow-200 p-1.5 rounded-lg text-[11px]">
+                                      <div className="flex items-center justify-between font-semibold">
                                         <span>🛵 Out for Delivery</span>
                                         {order.deliveryPartnerPhone && (
                                           <a
                                             href={`tel:${order.deliveryPartnerPhone}`}
-                                            className="underline text-[11px]"
+                                            className="underline text-[10px]"
                                           >
-                                            Call Rider
+                                            Call
                                           </a>
                                         )}
                                       </div>
                                       {order.deliveryPartnerName && (
-                                        <div className="text-[11px] font-normal text-[#163E26]/90 mt-0.5">
-                                          Rider: {order.deliveryPartnerName} • +91 {order.deliveryPartnerPhone}
+                                        <div className="text-[10px] text-yellow-800 mt-0.5 truncate">
+                                          {order.deliveryPartnerName} • {order.deliveryPartnerPhone}
                                         </div>
                                       )}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-1.5">
                                       <button
                                         type="button"
                                         onClick={() => handleMarkCompleted(order.id)}
-                                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-[11px] font-semibold py-1 rounded text-center cursor-pointer"
                                       >
-                                        ✓ Mark Delivered
+                                        ✓ Delivered
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setActiveModal({ type: 'details', title: `Order ${order.id}`, order })}
-                                        className="bg-[#FFFDF8] hover:bg-[#FAF6EE] border border-[#E8DDCA] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                        className="bg-[#FFFDF8] hover:bg-[#FAF6EE] border border-[#E8DDCA] text-[11px] font-medium py-1 rounded text-center cursor-pointer"
                                       >
                                         Details
                                       </button>
@@ -1625,26 +1701,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 )}
 
                                 {isCompleted && (
-                                  <div className="flex gap-2">
+                                  <div className="flex gap-1.5">
                                     <button
                                       type="button"
                                       onClick={() => setActiveModal({ type: 'details', title: `Order ${order.id}`, order })}
-                                      className="flex-1 bg-[#FFFDF8] border border-[#E8DDCA] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                      className="flex-1 bg-[#FFFDF8] border border-[#E8DDCA] text-[11px] font-medium py-1 rounded text-center cursor-pointer"
                                     >
-                                      View Details
+                                      Details
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setActiveModal({ type: 'kot', title: `Reprint KOT • ${order.id}`, order })}
-                                      className="flex-1 bg-[#FAF6EE] text-[#4B5149] text-xs font-medium py-1.5 rounded-lg text-center cursor-pointer"
+                                      className="flex-1 bg-[#FAF6EE] text-[#4B5149] text-[11px] font-medium py-1 rounded text-center cursor-pointer"
                                     >
-                                      Reprint KOT
+                                      Reprint
                                     </button>
                                   </div>
                                 )}
 
                                 {isDeclined && (
-                                  <div className="bg-[#FAF6EE] border border-[#E8DDCA] text-[#77766D] p-2 rounded text-center text-xs">
+                                  <div className="bg-gray-100 border border-gray-200 text-gray-600 p-1.5 rounded text-center text-[10px] font-medium">
                                     Declined Order
                                   </div>
                                 )}
@@ -1687,31 +1763,60 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
 
                 {/* Filters */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    {/* Category Filter Pills */}
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                      {['All', 'North Indian', 'Starters', 'Pizza & Pasta', 'Breads & Rice', 'Beverages & Desserts'].map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setMenuCategoryFilter(cat)}
+                          className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
+                            menuCategoryFilter === cat
+                              ? 'bg-[#163E26] text-white shadow-xs'
+                              : 'bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#4B5149] border border-[#E8DDCA]'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+
+                    <input
+                      type="text"
+                      value={menuSearchQuery}
+                      onChange={(e) => setMenuSearchQuery(e.target.value)}
+                      placeholder="Search dish by name..."
+                      className="w-full sm:w-56 bg-[#FFFDF8] text-xs text-[#17261D] px-3 py-1.5 rounded-lg border border-[#E8DDCA] focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Status & Tag Filter Pills (Item 12 Tagging System) */}
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                    {['All', 'North Indian', 'Starters', 'Pizza & Pasta', 'Breads & Rice', 'Beverages & Desserts'].map((cat) => (
+                    <span className="text-[11px] font-bold text-[#77766D] uppercase tracking-wider shrink-0 mr-1">
+                      Filter:
+                    </span>
+                    {[
+                      { id: 'All', label: 'All Items' },
+                      { id: 'Trending', label: '🔥 Trending Only' },
+                      { id: 'In Stock', label: '🟢 In Stock' },
+                      { id: 'Sold Out', label: '🔴 Sold Out' },
+                    ].map((tag) => (
                       <button
-                        key={cat}
+                        key={tag.id}
                         type="button"
-                        onClick={() => setMenuCategoryFilter(cat)}
-                        className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
-                          menuCategoryFilter === cat
+                        onClick={() => setMenuTagFilter(tag.id as any)}
+                        className={`whitespace-nowrap px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                          menuTagFilter === tag.id
                             ? 'bg-[#163E26] text-white shadow-xs'
                             : 'bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#4B5149] border border-[#E8DDCA]'
                         }`}
                       >
-                        {cat}
+                        {tag.label}
                       </button>
                     ))}
                   </div>
-
-                  <input
-                    type="text"
-                    value={menuSearchQuery}
-                    onChange={(e) => setMenuSearchQuery(e.target.value)}
-                    placeholder="Search dish by name..."
-                    className="w-full sm:w-56 bg-[#FFFDF8] text-xs text-[#17261D] px-3 py-1.5 rounded-lg border border-[#E8DDCA] focus:outline-none"
-                  />
                 </div>
 
                 {/* Table */}
@@ -1742,9 +1847,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   }}
                                 />
                                 <div>
-                                  <div className="font-bold text-[#17261D] flex items-center gap-1.5">
+                                  <div className="font-bold text-[#17261D] flex items-center gap-1.5 flex-wrap">
                                     <VegBadge />
                                     <span>{dish.name}</span>
+                                    {dish.isTrending && (
+                                      <span className="bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B] text-[9px] font-bold px-1.5 py-0.2 rounded-full">
+                                        🔥 Trending
+                                      </span>
+                                    )}
                                   </div>
                                   <span className="text-[10px] text-[#A89885]">100% Pure Veg</span>
                                 </div>
@@ -2153,6 +2263,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
 
+                  {/* Banner Aspect Ratio Guidance (Item 17) */}
+                  <div className="bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl p-3 sm:p-4 text-xs text-[#4B5149] space-y-2">
+                    <div className="font-bold text-xs text-[#17261D] flex items-center gap-1.5 uppercase tracking-wider">
+                      <span>📐 Recommended Banner Aspect Ratios & Dimensions</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-sans">
+                      <div className="bg-[#FFFDF8] p-2.5 rounded-lg border border-[#E8DDCA]/80 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#163E26]">🖥 Desktop Banner</span>
+                          <span className="text-[10px] bg-[#E8DDCA]/60 font-mono font-bold px-1.5 py-0.5 rounded text-[#2B180F]">3.84 : 1</span>
+                        </div>
+                        <div className="text-[11px] text-[#17261D] font-bold">1920 × 500 px</div>
+                        <p className="text-[10px] text-[#77766D]">Cinematic wide banner for full-screen desktop screens.</p>
+                      </div>
+                      <div className="bg-[#FFFDF8] p-2.5 rounded-lg border border-[#E8DDCA]/80 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#163E26]">📱 Mobile Banner</span>
+                          <span className="text-[10px] bg-[#E8DDCA]/60 font-mono font-bold px-1.5 py-0.5 rounded text-[#2B180F]">4 : 3</span>
+                        </div>
+                        <div className="text-[11px] text-[#17261D] font-bold">800 × 600 px (20% Taller)</div>
+                        <p className="text-[10px] text-[#77766D]">Optimized mobile aspect ratio with zero text overlay obstruction.</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[#8F5D2C] italic">
+                      💡 Pro-Tip: Embed promotional text, dish names, and offers directly inside the graphic. The homepage hero slider displays pure edge-to-edge images without text obstructions.
+                    </p>
+                  </div>
+
                   <div className="space-y-3">
                     {banners.length === 0 ? (
                       <p className="text-xs text-[#77766D] italic py-2">No custom banners found. Using system defaults.</p>
@@ -2222,6 +2360,113 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                       ))
                     )}
+                  </div>
+                </div>
+
+                {/* Follow Our Journey — Video / Reel Management (Item 23) */}
+                <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 sm:p-5 shadow-xs space-y-4">
+                  <div className="border-b border-[#E8DDCA]/60 pb-3">
+                    <h2 className="font-serif text-base font-bold text-[#17261D]">
+                      "Follow Our Journey" — Social Video & Reel Management
+                    </h2>
+                    <p className="text-xs text-[#77766D]">
+                      Manage Instagram reel links & video thumbnails featured on the customer homepage. The @greenwoodcafeindia handle overlay is dynamically preserved.
+                    </p>
+                  </div>
+
+                  {/* Add New Reel Input Form */}
+                  <div className="p-3 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA] space-y-2 text-xs">
+                    <span className="font-bold text-[#17261D] block">Add New Instagram Reel Link:</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-[#77766D] block mb-1">Reel Title / Caption</label>
+                        <input
+                          type="text"
+                          value={newReelTitle}
+                          onChange={(e) => setNewReelTitle(e.target.value)}
+                          placeholder="e.g. Sizzling Tandoori Platter"
+                          className="w-full bg-[#FFFDF8] px-2.5 py-1.5 rounded border border-[#E8DDCA] text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-[#77766D] block mb-1">Instagram Reel URL *</label>
+                        <input
+                          type="url"
+                          value={newReelUrl}
+                          onChange={(e) => setNewReelUrl(e.target.value)}
+                          placeholder="https://www.instagram.com/reel/..."
+                          className="w-full bg-[#FFFDF8] px-2.5 py-1.5 rounded border border-[#E8DDCA] text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-[#77766D] block mb-1">Thumbnail Image URL</label>
+                        <input
+                          type="text"
+                          value={newReelThumbnail}
+                          onChange={(e) => setNewReelThumbnail(e.target.value)}
+                          placeholder="/images/instagram/reel-real-1.jpg"
+                          className="w-full bg-[#FFFDF8] px-2.5 py-1.5 rounded border border-[#E8DDCA] text-xs focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-right pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAddReel}
+                        className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg cursor-pointer shadow-xs inline-flex items-center gap-1"
+                      >
+                        <span>+ Add Reel to Showcase</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Existing Reels List */}
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-bold text-[#77766D] uppercase tracking-wider">
+                      Active Video Reels ({socialReels.length}):
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {socialReels.map((reel) => (
+                        <div
+                          key={reel.id}
+                          className="flex items-center justify-between p-2.5 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA] gap-2"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative w-10 h-14 shrink-0 rounded overflow-hidden border border-[#E8DDCA] bg-black">
+                              <img
+                                src={reel.image}
+                                alt={reel.alt}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/images/instagram/reel-real-1.jpg';
+                                }}
+                              />
+                              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[7px] text-white text-center truncate">
+                                @greenwood
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-[#17261D] truncate">{reel.alt}</div>
+                              <a
+                                href={reel.reelUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-[#163E26] underline truncate block hover:text-[#C9A45C]"
+                              >
+                                {reel.reelUrl}
+                              </a>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReel(reel.id)}
+                            className="text-[#C83A25] hover:text-red-700 text-xs font-semibold px-2 py-1 shrink-0 cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -2526,6 +2771,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                 </div>
 
+                {/* Image Upload with Client Compression (Item 13) */}
+                <div>
+                  <label className="text-[11px] font-semibold text-[#77766D] block mb-1">
+                    Dish Photo (Auto Compressed for Fast Loading)
+                  </label>
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <img
+                      src={editDishForm.image || '/images/dish-detail/rec-dal-makhani.jpg'}
+                      alt="Preview"
+                      className="w-12 h-12 rounded-lg object-cover border border-[#E8DDCA] shrink-0"
+                    />
+                    <div className="flex-1 space-y-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, true)}
+                        className="text-[10px] text-[#4B5149] file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-[#163E26] file:text-white hover:file:bg-[#1E5233] cursor-pointer"
+                      />
+                      {compressingImage && (
+                        <div className="text-[10px] text-[#8F5D2C] animate-pulse">⏳ Optimizing high-res photo via HTML5 canvas...</div>
+                      )}
+                      {compressedSizeInfo && (
+                        <div className="text-[10px] text-[#168039] font-semibold">✓ {compressedSizeInfo}</div>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={editDishForm.image ?? ''}
+                    onChange={(e) => setEditDishForm({ ...editDishForm, image: e.target.value })}
+                    placeholder="Or enter image URL..."
+                    className="w-full bg-[#FAF6EE] p-1.5 rounded-lg border border-[#E8DDCA] text-[11px] text-[#17261D] focus:outline-none"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Category</label>
@@ -2599,6 +2879,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     onChange={(e) => setNewDishForm({ ...newDishForm, name: e.target.value })}
                     placeholder="e.g. Kadhai Paneer Special"
                     className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none"
+                  />
+                </div>
+
+                {/* Image Upload with Client Compression (Item 13) */}
+                <div>
+                  <label className="text-[11px] font-semibold text-[#77766D] block mb-1">
+                    Dish Photo (Auto Compressed for Fast Loading)
+                  </label>
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <img
+                      src={newDishForm.image || '/images/dish-detail/rec-dal-makhani.jpg'}
+                      alt="Preview"
+                      className="w-12 h-12 rounded-lg object-cover border border-[#E8DDCA] shrink-0"
+                    />
+                    <div className="flex-1 space-y-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, false)}
+                        className="text-[10px] text-[#4B5149] file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-[#163E26] file:text-white hover:file:bg-[#1E5233] cursor-pointer"
+                      />
+                      {compressingImage && (
+                        <div className="text-[10px] text-[#8F5D2C] animate-pulse">⏳ Optimizing high-res photo via HTML5 canvas...</div>
+                      )}
+                      {compressedSizeInfo && (
+                        <div className="text-[10px] text-[#168039] font-semibold">✓ {compressedSizeInfo}</div>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={newDishForm.image ?? ''}
+                    onChange={(e) => setNewDishForm({ ...newDishForm, image: e.target.value })}
+                    placeholder="Or enter image URL..."
+                    className="w-full bg-[#FAF6EE] p-1.5 rounded-lg border border-[#E8DDCA] text-[11px] text-[#17261D] focus:outline-none"
                   />
                 </div>
 
@@ -2716,6 +3031,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     placeholder="e.g. Handcrafted Slow-Cooked Dal Makhani & Artisanal Breads"
                     className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none"
                   />
+                </div>
+
+                {/* Banner Dimension Guidance (Item 17) */}
+                <div className="p-2.5 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA] text-[11px] text-[#4B5149] space-y-1 font-sans">
+                  <div className="font-bold text-[#163E26] flex items-center gap-1">
+                    <span>📐 Recommended Dimensions & Aspect Ratio:</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="bg-[#FFFDF8] p-1.5 rounded border border-[#E8DDCA]/70">
+                      <strong>Desktop:</strong> 1920 × 500 px (3.84:1)
+                    </div>
+                    <div className="bg-[#FFFDF8] p-1.5 rounded border border-[#E8DDCA]/70">
+                      <strong>Mobile:</strong> 800 × 600 px (4:3, +20% height)
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-[#8F5D2C] italic">
+                    Note: Text overlays are removed from homepage slider; embed branding into image graphic directly.
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">

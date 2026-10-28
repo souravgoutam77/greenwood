@@ -4,6 +4,7 @@ import type { Dish } from '../data/restaurantData';
 import { SEARCHABLE_MENU } from '../data/searchableMenu';
 import type { SearchableMenuItem } from '../data/searchableMenu';
 import { VegBadge, WhatsAppIcon } from './Icons';
+import { isAdminLoggedIn } from '../services/auth';
 
 interface HeaderProps {
   onNavClick: (href: string) => void;
@@ -249,11 +250,9 @@ export const Header: React.FC<HeaderProps> = ({
             <svg className="w-5 h-5 sm:w-5.5 sm:h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
             </svg>
-            {cartCount > 0 && (
-              <span className="absolute top-1 right-1 bg-[#C9A45C] text-[#163E26] text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-[#2B180F]">
-                {cartCount}
-              </span>
-            )}
+            <span className="absolute top-1 right-1 bg-[#C9A45C] text-[#163E26] text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-[#2B180F]">
+              {cartCount}
+            </span>
           </button>
 
           {/* User Profile / My Account Pill (Desktop) matching reference mockup */}
@@ -423,23 +422,25 @@ export const Header: React.FC<HeaderProps> = ({
             </a>
           </div>
 
-          {/* Staff Kitchen POS Portal Link */}
-          <div>
-            <a
-              href="#admin"
-              onClick={(e) => {
-                e.preventDefault();
-                handleLinkClick('#admin');
-              }}
-              className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold text-[#E8D094] hover:bg-[#2B180F] border border-[#C9A45C]/35 bg-[#2B180F]/60 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <span>🍳</span>
-                <span>Kitchen POS & Admin Portal</span>
-              </span>
-              <span className="text-xs">→</span>
-            </a>
-          </div>
+          {/* Staff Kitchen POS Portal Link: Strictly restricted to logged-in administrators */}
+          {isAdminLoggedIn() && (
+            <div>
+              <a
+                href="#admin"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleLinkClick('#admin');
+                }}
+                className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold text-[#E8D094] hover:bg-[#2B180F] border border-[#C9A45C]/35 bg-[#2B180F]/60 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <span>🍳</span>
+                  <span>Kitchen POS & Admin Portal</span>
+                </span>
+                <span className="text-xs">→</span>
+              </a>
+            </div>
+          )}
 
           <div className="pt-2 text-xs text-[#9B8C7E] px-3">
             Open daily: 11:00 AM - 11:30 PM • Narela, Delhi

@@ -43,3 +43,15 @@ export function clearCustomerAuth(): void {
     console.error('Failed to clear customer auth:', err);
   }
 }
+
+export function isAdminLoggedIn(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem('gw_admin_session');
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed && parsed.authorized);
+  } catch {
+    return false;
+  }
+}

@@ -313,9 +313,10 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                 <button
                   type="button"
                   onClick={onNavigateToMenu}
-                  className="font-sans text-xs text-[#163E26] hover:text-[#C9A45C] font-semibold underline underline-offset-2 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#163E26] hover:bg-[#1E5233] text-white font-sans text-xs font-semibold shadow-xs hover:shadow transition-all cursor-pointer"
                 >
-                  Order More Dishes →
+                  <span>Order More Dishes</span>
+                  <span>→</span>
                 </button>
               </>
             )}
@@ -687,12 +688,12 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                 onClick={() =>
                   setActiveModal({
                     type: 'cancel',
-                    title: 'Cancel Order #GW-8492?',
+                    title: `Cancel Order ${liveOrder.id}?`,
                     message:
                       'Our kitchen has already started preparing your fresh vegetarian dishes. Orders can only be cancelled within 2 minutes of placement. Would you like to call the café directly?',
                   })
                 }
-                className="w-full sm:w-auto bg-[#FFFDF8] hover:bg-[#FFF5F3] text-[#C83A25] border border-[#C83A25] hover:border-[#A82B18] text-xs font-semibold px-4 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                className="w-full sm:w-auto bg-[#FFFDF8] hover:bg-[#FFF5F3] text-[#C83A25] border border-[#C83A25] hover:border-[#A82B18] text-xs font-semibold px-4 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -948,8 +949,8 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               </svg>
             </button>
 
-            {/* Modal Title */}
-            <h3 className="font-serif text-xl font-bold text-[#17261D] mb-3 pr-6">
+            {/* Modal Title with clean font for Order IDs */}
+            <h3 className="font-sans text-base sm:text-lg font-bold text-[#17261D] mb-3 pr-6">
               {activeModal.title}
             </h3>
 
@@ -992,10 +993,10 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               </button>
               {activeModal.type === 'cancel' && (
                 <a
-                  href="tel:+919876543210"
-                  className="bg-[#C83A25] hover:bg-[#A82B18] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+                  href="tel:+919066906607"
+                  className="bg-[#C83A25] hover:bg-[#A82B18] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer"
                 >
-                  Call Restaurant (+91 98765 43210)
+                  Call Restaurant (+91 90669 06607)
                 </a>
               )}
             </div>

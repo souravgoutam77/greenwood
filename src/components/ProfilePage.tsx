@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { VegBadge } from './Icons';
 import { api } from '../services/api';
+import { isAdminLoggedIn } from '../services/auth';
 
 interface Address {
   id: string;
@@ -309,62 +310,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         </div>
 
         {/* ========================================================= */}
-        {/* SECTION 3: VERIFIED MEMBER ACCOUNT & SECURITY             */}
-        {/* ========================================================= */}
-        <div className="bg-[#FFFDF8] rounded-2xl border border-[#E8DDCA] shadow-sm p-4 sm:p-5 mb-6 relative overflow-hidden">
-          {/* Subtle botanical leaves in corner */}
-          <div className="absolute top-0 right-0 w-24 h-24 opacity-40 pointer-events-none hidden sm:block">
-            <img
-              src="/images/profile/banner_leaves.jpg"
-              alt=""
-              className="w-full h-full object-contain mix-blend-multiply"
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-            {/* Left: Leaf Circle + Text */}
-            <div className="flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-full bg-[#EBF3E6] border border-[#CDE1BE] flex items-center justify-center text-[#163E26] shrink-0 shadow-2xs">
-                <svg className="w-5 h-5 text-[#163E26]" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-sans font-bold text-sm sm:text-base text-[#17261D] leading-tight mb-0.5">
-                  Verified Pure Veg Member
-                </h3>
-                <p className="font-sans text-xs sm:text-[13px] text-[#77766D] max-w-xl">
-                  Mobile OTP authentication active. Your orders, reward perks, and delivery addresses are securely synced.
-                </p>
-              </div>
-            </div>
-
-            {/* Right: Sync with Google Button */}
-            <div className="shrink-0">
-              <button
-                type="button"
-                onClick={() =>
-                  setActiveModal({
-                    type: 'google-sync',
-                    title: 'Sync with Google Account',
-                  })
-                }
-                className="w-full sm:w-auto bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#2B180F] border border-[#E8DDCA] hover:border-[#C9A45C] text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2.5 transition-all shadow-xs"
-              >
-                {/* Multi-Color Google G SVG */}
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.02h3.88c2.27-2.09 3.665-5.17 3.665-9.11z" />
-                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.02c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.27v3.12C3.32 21.43 7.37 24 12 24z" />
-                  <path fill="#FBBC05" d="M5.28 14.3c-.25-.72-.38-1.49-.38-2.3s.13-1.58.38-2.3V6.58H1.27C.46 8.2 0 10.04 0 12s.46 3.8 1.27 5.42l4.01-3.12z" />
-                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.37 0 3.32 2.57 1.27 6.58l4.01 3.12c.95-2.83 3.6-4.95 6.72-4.95z" />
-                </svg>
-                Sync Account
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================= */}
         {/* SECTION 4: SAVED DELIVERY ADDRESSES                       */}
         {/* ========================================================= */}
         <div className="mb-6">
@@ -612,29 +557,31 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               <span className="text-xs text-[#163E26] group-hover:translate-x-0.5 transition-transform shrink-0 pl-1">→</span>
             </button>
 
-            {/* Action 6: Staff Admin Portal */}
-            <button
-              type="button"
-              onClick={() => {
-                window.location.hash = '#admin';
-              }}
-              className="bg-[#FFFDF8] hover:bg-[#FAF6EE] border border-[#C9A45C]/60 hover:border-[#163E26] rounded-xl p-3 text-left transition-all shadow-2xs hover:shadow-xs flex items-center justify-between group cursor-pointer col-span-2 sm:col-span-1"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#2B180F] border border-[#C9A45C] flex items-center justify-center text-[#C9A45C] shrink-0 group-hover:scale-105 transition-transform">
-                  <span className="text-xs">🔑</span>
+            {/* Action 6: Staff Admin Portal: Strictly visible to logged-in admins only */}
+            {isAdminLoggedIn() && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.hash = '#admin';
+                }}
+                className="bg-[#FFFDF8] hover:bg-[#FAF6EE] border border-[#C9A45C]/60 hover:border-[#163E26] rounded-xl p-3 text-left transition-all shadow-2xs hover:shadow-xs flex items-center justify-between group cursor-pointer col-span-2 sm:col-span-1"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#2B180F] border border-[#C9A45C] flex items-center justify-center text-[#C9A45C] shrink-0 group-hover:scale-105 transition-transform">
+                    <span className="text-xs">🔑</span>
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-serif font-bold text-xs sm:text-sm text-[#17261D] truncate">
+                      Staff Admin
+                    </h4>
+                    <span className="text-[10px] text-[#8F5D2C] font-semibold block">
+                      Kitchen POS Portal
+                    </span>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <h4 className="font-serif font-bold text-xs sm:text-sm text-[#17261D] truncate">
-                    Staff Admin
-                  </h4>
-                  <span className="text-[10px] text-[#8F5D2C] font-semibold block">
-                    Kitchen POS Portal
-                  </span>
-                </div>
-              </div>
-              <span className="text-xs text-[#163E26] group-hover:translate-x-0.5 transition-transform shrink-0 pl-1">→</span>
-            </button>
+                <span className="text-xs text-[#163E26] group-hover:translate-x-0.5 transition-transform shrink-0 pl-1">→</span>
+              </button>
+            )}
 
           </div>
         </div>

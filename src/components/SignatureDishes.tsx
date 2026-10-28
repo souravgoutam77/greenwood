@@ -31,29 +31,57 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
       .getDishes()
       .then((allDishes) => {
         if (!isMounted || !allDishes || allDishes.length === 0) return;
-        const trendingOnly = allDishes.filter((d) => d.isTrending && d.inStock);
-        if (trendingOnly.length > 0) {
-          setDishes(
-            trendingOnly.map((d) => ({
-              id: d.id,
-              name: d.name,
-              category: d.category,
-              price: d.price,
-              image: d.image || '/images/dish-detail/rec-dal-makhani.jpg',
-              description: d.description || 'Pure Vegetarian signature delicacy.',
-              rating: d.rating || 4.8,
-              reviewsCount: d.reviews_count || 32,
-              isVeg: true,
-            }))
-          );
-        }
+        const trendingOnly = allDishes.filter((d) => Boolean(d.isTrending) && Boolean(d.inStock !== false));
+        const listToDisplay = trendingOnly.length > 0 ? trendingOnly : allDishes.slice(0, 6);
+        setDishes(
+          listToDisplay.map((d) => ({
+            id: d.id,
+            name: d.name || 'Greenwood Special',
+            category: d.category || 'Chef Special',
+            price: Number(d.price) || 249,
+            image: d.image || '/images/dish-detail/rec-dal-makhani.jpg',
+            description: d.description || '100% Pure Vegetarian delicacy.',
+            rating: d.rating || 4.8,
+            reviewsCount: d.reviews_count || 42,
+            isVeg: true,
+          }))
+        );
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('Fallback to local signature dishes:', err);
+      });
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  // Track manual touch / scroll position to accurately update pagination dots
+  const handleScroll = () => {
+    if (scrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+      const totalItems = dishes.length;
+      if (totalItems <= 1) return;
+      const maxScroll = scrollWidth - clientWidth;
+      if (maxScroll <= 0) return;
+      const itemWidth = maxScroll / (totalItems - 1);
+      const index = Math.min(totalItems - 1, Math.max(0, Math.round(scrollLeft / itemWidth)));
+      setActiveSlide(index);
+    }
+  };
+
+  // Jump to specific slide when dot clicked
+  const handleDotClick = (index: number) => {
+    if (scrollRef.current) {
+      const { scrollWidth, clientWidth } = scrollRef.current;
+      const totalItems = dishes.length;
+      if (totalItems <= 1) return;
+      const maxScroll = scrollWidth - clientWidth;
+      const targetLeft = (maxScroll / (totalItems - 1)) * index;
+      scrollRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' });
+      setActiveSlide(index);
+    }
+  };
 
   // Gentle auto-slide on mobile / scrollable viewports
   useEffect(() => {
@@ -63,14 +91,13 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
       if (scrollRef.current) {
         const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
         if (scrollWidth > clientWidth + 10) {
-          const step = 185;
+          const step = 220;
           const maxScroll = scrollWidth - clientWidth;
           const nextScroll = scrollLeft + step >= maxScroll - 10 ? 0 : scrollLeft + step;
           scrollRef.current.scrollTo({ left: nextScroll, behavior: 'smooth' });
-          setActiveSlide((prev) => (prev + 1) % dishes.length);
         }
       }
-    }, 3200);
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [isInteracting, dishes.length]);
@@ -124,7 +151,8 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
         onMouseLeave={handleInteractionEnd}
         onTouchStart={handleInteractionStart}
         onTouchEnd={handleInteractionEnd}
-        className="flex overflow-x-auto md:grid md:grid-cols-3 gap-3 sm:gap-4 md:gap-5 pb-2 md:pb-0 no-scrollbar snap-x snap-mandatory"
+        onScroll={handleScroll}
+        className="flex overflow-x-auto md:grid md:grid-cols-3 gap-3.5 sm:gap-4 md:gap-6 pb-2.5 md:pb-0 no-scrollbar snap-x snap-mandatory"
       >
         {dishes.map((dish) => {
           const isFav = !!favorites[dish.id];
@@ -133,57 +161,56 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
           return (
             <div
               key={dish.id}
-              className="w-[175px] sm:w-[205px] md:w-auto shrink-0 snap-center bg-[#FFFDF8] rounded-xl sm:rounded-2xl border border-[#E8DDCA] p-2.5 sm:p-3 md:p-3.5 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between group"
+              className="w-[210px] sm:w-[240px] md:w-auto shrink-0 snap-center bg-[#FFFDF8] rounded-xl sm:rounded-2xl border border-[#E8DDCA] p-2.5 sm:p-3.5 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between group"
             >
-              {/* Dish Image Box with Pure Veg Marker & Ambient Soft Light Glow */}
+              {/* Dish Image Box: Enlarge imagery by 25% with soft ambient lighting */}
               <div
                 onClick={() => onDishClick?.(dish)}
-                className="relative w-full h-26 sm:h-30 md:h-44 rounded-lg sm:rounded-xl overflow-hidden bg-[#FAF6EE] dish-ambient-light cursor-pointer"
+                className="relative w-full h-36 sm:h-44 md:h-52 rounded-lg sm:rounded-xl overflow-hidden bg-[#FAF6EE] dish-ambient-light cursor-pointer"
               >
                 <img
                   src={dish.image}
                   alt={dish.name}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                   loading="eager"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/images/dish-detail/rec-dal-makhani.jpg';
+                  }}
                 />
 
                 {/* Gentle Ambient Gold Light Gradient Overlay */}
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-transparent to-[#C9A45C]/20 mix-blend-screen" />
                 
                 {/* 100% Pure Veg Indicator Badge on Top Right */}
-                <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 scale-85 sm:scale-95 md:scale-100">
+                <div className="absolute top-2 right-2 z-10">
                   <VegBadge />
                 </div>
               </div>
 
-              {/* Dish Content — Zero inner divider borders, compact natural spacing */}
+              {/* Dish Content: Reduced text clutter, focused on dish name & price */}
               <div className="pt-2 sm:pt-2.5 flex flex-col flex-grow justify-between">
                 <div>
                   <h3
                     onClick={() => onDishClick?.(dish)}
-                    className="font-serif text-xs sm:text-sm md:text-xl font-bold text-[#17261D] group-hover:text-[#163E26] transition-colors line-clamp-1 cursor-pointer"
+                    className="font-serif text-sm sm:text-base md:text-lg font-bold text-[#17261D] group-hover:text-[#163E26] transition-colors line-clamp-1 cursor-pointer"
                   >
                     {dish.name}
                   </h3>
-
-                  <p className="text-[10px] sm:text-xs text-[#77766D] line-clamp-2 mt-0.5 leading-snug">
-                    {dish.description}
-                  </p>
                 </div>
 
-                {/* Rating + Price + Like Heart + Add Button (All compact without divider borders) */}
+                {/* Rating + Price + Like Heart + Add Button */}
                 <div className="flex items-end justify-between mt-2 pt-0.5">
                   <div className="flex flex-col">
                     {/* Rating */}
-                    <div className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-[#17261D] font-medium leading-none mb-1">
-                      <span className="text-[#C9A45C] text-xs">★</span>
+                    <div className="flex items-center gap-1 text-[11px] sm:text-xs text-[#17261D] font-medium leading-none mb-1">
+                      <span className="text-[#C9A45C]">★</span>
                       <span className="font-bold">{dish.rating}</span>
-                      <span className="text-[#77766D] text-[9px] sm:text-[10px]">({dish.reviewsCount})</span>
+                      <span className="text-[#77766D] text-[10px]">({dish.reviewsCount})</span>
                     </div>
 
                     {/* Price (MRP) & Like Heart Button side by side */}
                     <div className="flex items-center gap-1.5 sm:gap-2">
-                      <span className="font-sans text-xs sm:text-base md:text-xl font-bold text-[#C83A25] leading-none">
+                      <span className="font-sans text-sm sm:text-lg font-bold text-[#C83A25] leading-none">
                         ₹{dish.price}
                       </span>
                       <button
@@ -210,7 +237,7 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
                   <button
                     type="button"
                     onClick={() => handleAdd(dish)}
-                    className={`px-2.5 sm:px-3.5 md:px-5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs md:text-sm font-semibold transition-all duration-200 cursor-pointer flex items-center gap-0.5 sm:gap-1 shadow-2xs ${
+                    className={`px-3 sm:px-4 md:px-5 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer flex items-center gap-1 shadow-2xs ${
                       isRecentlyAdded
                         ? 'bg-[#2E5A3A] text-white scale-95'
                         : 'bg-[#163E26] hover:bg-[#1E5233] text-white active:scale-95'
@@ -236,13 +263,16 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
         })}
       </div>
 
-      {/* Mobile Slider Indicator Dots */}
-      <div className="md:hidden flex items-center justify-center gap-1.5 pt-2">
+      {/* Mobile Slider Indicator Dots: Interactive & dynamically tracking swipe position */}
+      <div className="md:hidden flex items-center justify-center gap-1.5 pt-2.5">
         {dishes.map((_, i) => (
-          <span
+          <button
             key={i}
-            className={`h-1.5 rounded-full transition-all duration-300 ${
-              activeSlide === i ? 'w-4 bg-[#163E26]' : 'w-1.5 bg-[#D5CBBA]'
+            type="button"
+            onClick={() => handleDotClick(i)}
+            aria-label={`Go to dish slide ${i + 1}`}
+            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+              activeSlide === i ? 'w-5 bg-[#163E26]' : 'w-1.5 bg-[#D5CBBA] hover:bg-[#A89885]'
             }`}
           />
         ))}

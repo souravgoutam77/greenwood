@@ -134,10 +134,22 @@ export const HeroBanner: React.FC = () => {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Banner Slide Frame */}
-        <div className="relative w-full aspect-[16/10] sm:aspect-[21/9] md:aspect-[674/144] overflow-hidden">
+        {/* Banner Slide Frame: 20% increased mobile height (aspect-[4/3] on mobile) */}
+        <div className="relative w-full aspect-[4/3] sm:aspect-[21/9] md:aspect-[674/144] min-h-[240px] sm:min-h-0 overflow-hidden">
           {banners.map((slide, index) => {
             const isActive = index === currentSlide;
+            const content = (
+              <picture className="w-full h-full block">
+                <source media="(max-width: 640px)" srcSet={slide.imageMobile || slide.imageDesktop} />
+                <img
+                  src={slide.imageDesktop}
+                  alt={slide.title || 'Greenwood Cafe Special'}
+                  className="w-full h-full object-cover object-center"
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                />
+              </picture>
+            );
+
             return (
               <div
                 key={slide.id || index}
@@ -146,59 +158,13 @@ export const HeroBanner: React.FC = () => {
                 }`}
                 aria-hidden={!isActive}
               >
-                {/* Background Picture with mobile-friendly source */}
-                <picture className="w-full h-full block">
-                  <source media="(max-width: 640px)" srcSet={slide.imageMobile || slide.imageDesktop} />
-                  <img
-                    src={slide.imageDesktop}
-                    alt={slide.title}
-                    className="w-full h-full object-cover object-center"
-                    loading={index === 0 ? 'eager' : 'lazy'}
-                  />
-                </picture>
-
-                {/* Subtle Contrast Gradient for Crystal-Clear Text Legibility */}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-transparent sm:from-black/70 sm:via-black/30 sm:to-transparent pointer-events-none" />
-
-                {/* Banner Content Overlay */}
-                <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-12 md:px-16 lg:px-20 z-10 pointer-events-none">
-                  <div className="max-w-xs sm:max-w-sm md:max-w-lg">
-                    {slide.title.includes('.') ? (
-                      <>
-                        <div className="font-script text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] leading-tight">
-                          {slide.title.split('.')[0]}.
-                        </div>
-                        <div className="font-script text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-[#E8D094] drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] -mt-1 sm:-mt-2">
-                          {slide.title.split('.').slice(1).join('.').trim()}
-                        </div>
-                      </>
-                    ) : (
-                      <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] leading-tight">
-                        {slide.title}
-                      </h2>
-                    )}
-
-                    {slide.subtitle && (
-                      <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm md:text-base text-[#FAF6EE]/90 line-clamp-2 max-w-md drop-shadow">
-                        {slide.subtitle}
-                      </p>
-                    )}
-
-                    {slide.linkUrl && (
-                      <div className="mt-3 sm:mt-4 pointer-events-auto">
-                        <a
-                          href={slide.linkUrl}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-[#163E26] hover:bg-[#1f5635] text-[#FAF6EE] text-xs sm:text-sm font-medium shadow-sm transition-transform active:scale-95 border border-[#C9A45C]/40"
-                        >
-                          <span>Explore Menu</span>
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path d="M9 5l7 7-7 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {slide.linkUrl ? (
+                  <a href={slide.linkUrl} className="block w-full h-full cursor-pointer" tabIndex={isActive ? 0 : -1}>
+                    {content}
+                  </a>
+                ) : (
+                  content
+                )}
               </div>
             );
           })}

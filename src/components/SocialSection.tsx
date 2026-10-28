@@ -2,12 +2,41 @@ import React, { useRef, useEffect, useState } from 'react';
 import { LeafBranch, InstagramIcon, GoogleMapsIcon } from './Icons';
 import { RESTAURANT_DATA } from '../data/restaurantData';
 
+interface SocialPost {
+  id: string;
+  image: string;
+  reelUrl?: string;
+  alt: string;
+}
+
 export const SocialSection: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isInteracting, setIsInteracting] = useState(false);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const posts = RESTAURANT_DATA.socialThumbnails;
+  const [posts, setPosts] = useState<SocialPost[]>(() => {
+    try {
+      const saved = localStorage.getItem('greenwood_social_reels');
+      return saved ? (JSON.parse(saved) as SocialPost[]) : RESTAURANT_DATA.socialThumbnails;
+    } catch {
+      return RESTAURANT_DATA.socialThumbnails;
+    }
+  });
+
+  useEffect(() => {
+    const handleReelsUpdated = () => {
+      try {
+        const saved = localStorage.getItem('greenwood_social_reels');
+        if (saved) {
+          setPosts(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    window.addEventListener('greenwood_reels_updated', handleReelsUpdated);
+    return () => window.removeEventListener('greenwood_reels_updated', handleReelsUpdated);
+  }, []);
 
   // Gentle auto-slide for Instagram videos
   useEffect(() => {

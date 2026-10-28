@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { CartItem } from './CartDrawer';
-import { VegBadge, WhatsAppIcon, LeafBranch } from './Icons';
+import { VegBadge, LeafBranch } from './Icons';
 import { api } from '../services/api';
 import { getCustomerAuth, type CustomerAuth } from '../services/auth';
 import { AuthModal } from './AuthModal';
@@ -108,40 +108,22 @@ export const CartPage: React.FC<CartPageProps> = ({
     }
   };
 
-  // Order Placement Handler (Strict Authentication & Verification)
-  const handlePlaceOrderWhatsApp = async () => {
-    setValidationError(null);
-
-    // Guard 1: Kitchen Operational Status
-    if (!isKitchenOpen) {
-      setValidationError('Greenwood Café & Restaurant is currently closed for online orders. Please check opening hours or contact us via WhatsApp.');
-      return;
-    }
-
-    // Guard 2: Customer Identity Verification (NO GUEST CHECKOUT)
-    if (!auth || !auth.verified) {
-      setShowAuthModal(true);
-      return;
-    }
-
-    // Guard 3: Delivery Address (for Delivery orders)
-    if (orderType === 'delivery') {
-      if (!customerAddress || customerAddress.trim().length < 5) {
-        setValidationError('Please enter a complete delivery address within Narela hub radius.');
-        return;
-      }
-    }
-
+  // Submit verified order to backend & show confirmed modal
+  const submitVerifiedOrder = async (verifiedAuth: CustomerAuth) => {
     if (items.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
+    setValidationError(null);
+
+    const effectiveName = verifiedAuth.name || customerName.trim() || 'Greenwood Guest';
+    const effectivePhone = verifiedAuth.phone || customerPhone.replace(/\D/g, '').slice(-10);
 
     let assignedId = `#GW-${Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
       // 1. Persist real order to Backend Database
       const res = await api.createOrder({
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerName: effectiveName,
+        customerPhone: effectivePhone,
         customerAddress: orderType === 'delivery' ? customerAddress.trim() : 'Narela Hub (Takeaway Counter)',
         orderType,
         paymentMode: 'Cash on Delivery',
@@ -171,16 +153,39 @@ export const CartPage: React.FC<CartPageProps> = ({
 
     setCreatedOrderId(assignedId);
 
-    // 2. Open pre-formatted WhatsApp order message
-    const itemsSummary = items
-      .map((i) => `• ${i.dish.name} × ${i.quantity} (₹${i.dish.price * i.quantity})`)
-      .join('\n');
+    // Save active order locally for immediate tracking sync
+    try {
+      const activeOrderPayload = {
+        id: assignedId,
+        placedTime: 'Just now',
+        status: 'New',
+        customerName: effectiveName,
+        customerPhone: effectivePhone,
+        orderType: orderType === 'delivery' ? 'Home Delivery' : 'Takeaway',
+        addressOrTable: orderType === 'delivery' ? customerAddress.trim() : 'Counter Pickup',
+        total: grandTotal,
+        paymentMode: 'Cash on Delivery',
+        items: items.map((i) => ({
+          name: i.dish.name,
+          quantity: i.quantity,
+          price: i.dish.price * i.quantity,
+          image: i.dish.image,
+        })),
+      };
+      localStorage.setItem('gw_live_order', JSON.stringify(activeOrderPayload));
+    } catch {}
 
-    const msg = `🌿 *NEW ORDER [${assignedId}] — GREENWOOD CAFÉ & RESTAURANT* 🌿
+    // Open pre-formatted WhatsApp order message
+    try {
+      const itemsSummary = items
+        .map((i) => `• ${i.dish.name} × ${i.quantity} (₹${i.dish.price * i.quantity})`)
+        .join('\n');
+
+      const msg = `🌿 *NEW ORDER [${assignedId}] — GREENWOOD CAFÉ & RESTAURANT* 🌿
 -------------------------------------------
 *Order ID:* ${assignedId}
-*Customer:* ${customerName.trim()} (Verified Member)
-*Phone:* +91 ${customerPhone.trim()}
+*Customer:* ${effectiveName} (Verified Customer)
+*Phone:* +91 ${effectivePhone}
 *Order Mode:* ${orderType === 'delivery' ? `Home Delivery (Within ${deliveryRadiusKm}km Radius)` : 'Self Takeaway'}
 ${orderType === 'delivery' ? `*Address:* ${customerAddress.trim()}` : '*Pickup:* Greenwood Café & Restaurant, Sector A10, Narela'}
 *Payment Mode:* Cash on Delivery
@@ -197,9 +202,51 @@ ${appliedCoupon ? `*Discount Applied (${appliedCoupon}):* -₹${discount}\n` : '
 -------------------------------------------
 _Please confirm kitchen acceptance and live preparation status!_`;
 
-    const encoded = encodeURIComponent(msg);
-    window.open(`https://wa.me/919066906607?text=${encoded}`, '_blank');
+      const encoded = encodeURIComponent(msg);
+      window.open(`https://wa.me/919066906607?text=${encoded}`, '_blank');
+    } catch {}
+
     setOrderSuccess(true);
+  };
+
+  // Order Placement Handler: Triggers OTP popup ONLY upon clicking Place Order if unverified
+  const handlePlaceOrderWhatsApp = async () => {
+    setValidationError(null);
+
+    // Guard 1: Kitchen Operational Status
+    if (!isKitchenOpen) {
+      setValidationError('Greenwood Café & Restaurant is currently closed for online orders. Please check opening hours or contact us via WhatsApp.');
+      return;
+    }
+
+    if (!customerName || customerName.trim().length < 2) {
+      setValidationError('Please enter your full name before placing the order.');
+      return;
+    }
+
+    const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length !== 10) {
+      setValidationError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    // Guard 2: Delivery Address (for Delivery orders)
+    if (orderType === 'delivery') {
+      if (!customerAddress || customerAddress.trim().length < 5) {
+        setValidationError('Please enter a complete delivery address within Narela hub radius.');
+        return;
+      }
+    }
+
+    if (items.length === 0 || isSubmitting) return;
+
+    // Guard 3: Customer Identity Verification: Popup ONLY upon clicking Place Order!
+    if (!auth || !auth.verified || auth.phone !== cleanPhone) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    await submitVerifiedOrder(auth);
   };
 
   return (
@@ -431,93 +478,75 @@ _Please confirm kitchen acceptance and live preparation status!_`;
               <div className="bg-[#FFFDF8] border border-[#E8DDCA] rounded-2xl p-4 sm:p-5 shadow-xs">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold text-[#17261D] uppercase tracking-wider">
-                    Customer Identity &amp; Delivery
+                    Customer &amp; Delivery Details
                   </span>
                   {auth?.verified ? (
                     <span className="text-[10px] bg-[#DCE8CB] text-[#163E26] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                       <span>✓</span>
-                      <span>Verified Mobile</span>
+                      <span>Verified Mobile (+91 {auth.phone})</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] bg-[#FEF2F2] text-[#C83A25] px-2 py-0.5 rounded-full font-semibold">
-                      OTP Required
+                    <span className="text-[10px] text-[#77766D] font-medium">
+                      OTP on place order
                     </span>
                   )}
                 </div>
 
-                {auth?.verified ? (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA] flex items-center justify-between">
-                      <div>
-                        <div className="font-sans font-bold text-xs sm:text-sm text-[#17261D]">
-                          {auth.name}
-                        </div>
-                        <div className="text-xs text-[#77766D] mt-0.5">
-                          +91 {auth.phone} • Verified Member
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowAuthModal(true)}
-                        className="text-[11px] font-semibold text-[#163E26] hover:underline cursor-pointer"
-                      >
-                        Change
-                      </button>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#4B5149] mb-1">
+                        Full Name <span className="text-[#C83A25]">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="e.g. Rahul Sharma"
+                        className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
+                      />
                     </div>
-
-                    {orderType === 'delivery' && (
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-[11px] font-medium text-[#77766D]">
-                            Delivery Address in Narela / Delhi Hub <span className="text-[#C83A25]">*</span>
-                          </label>
-                          <span className="text-[10px] text-[#163E26] font-medium">
-                            Radius: {deliveryRadiusKm} km
-                          </span>
-                        </div>
-                        <textarea
-                          rows={2}
-                          required
-                          value={customerAddress}
-                          onChange={(e) => setCustomerAddress(e.target.value)}
-                          placeholder="House/Flat No, Building, Pocket, Sector A10, Narela..."
-                          className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26] resize-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-[#FFF8EE] border border-[#F3E2C4] rounded-xl text-center">
-                      <p className="text-xs text-[#2B180F] font-medium mb-2">
-                        Mobile verification is required before placing your food order.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setShowAuthModal(true)}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#163E26] hover:bg-[#1f5635] text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
-                      >
-                        <span>Verify with Mobile OTP</span>
-                        <span>&rarr;</span>
-                      </button>
-                    </div>
-
-                    {orderType === 'delivery' && (
-                      <div>
-                        <label className="block text-[11px] font-medium text-[#77766D] mb-1">
-                          Delivery Address (Narela)
-                        </label>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#4B5149] mb-1">
+                        10-Digit Mobile Number <span className="text-[#C83A25]">*</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#77766D]">+91</span>
                         <input
-                          type="text"
-                          value={customerAddress}
-                          onChange={(e) => setCustomerAddress(e.target.value)}
-                          placeholder="Sector, Pocket, House No, Narela"
-                          className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
+                          type="tel"
+                          required
+                          maxLength={10}
+                          value={customerPhone}
+                          onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                          placeholder="9876543210"
+                          className="w-full pl-11 pr-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] font-mono focus:outline-none focus:border-[#163E26]"
                         />
                       </div>
-                    )}
+                    </div>
                   </div>
-                )}
+
+                  {orderType === 'delivery' && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-semibold text-[#4B5149]">
+                          Delivery Address in Narela Hub Area <span className="text-[#C83A25]">*</span>
+                        </label>
+                        <span className="text-[10px] text-[#163E26] font-medium">
+                          Hub Delivery (within {deliveryRadiusKm} km)
+                        </span>
+                      </div>
+                      <textarea
+                        rows={2}
+                        required
+                        value={customerAddress}
+                        onChange={(e) => setCustomerAddress(e.target.value)}
+                        placeholder="House/Flat No, Building, Pocket, Sector A10, Narela..."
+                        className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26] resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
 
                 <p className="text-[10px] text-[#77766D] mt-2.5">
                   📍 Verified orders are synchronized in real-time with Greenwood Narela kitchen &amp; delivery rider.
@@ -717,15 +746,6 @@ _Please confirm kitchen acceptance and live preparation status!_`;
                   >
                     Kitchen Currently Closed • Reopening Soon
                   </button>
-                ) : !auth?.verified ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowAuthModal(true)}
-                    className="w-full mt-3 bg-[#163E26] hover:bg-[#1E5635] text-white py-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                  >
-                    <span>Verify Mobile to Place Order • ₹{grandTotal}</span>
-                    <span>&rarr;</span>
-                  </button>
                 ) : (
                   <button
                     type="button"
@@ -733,8 +753,8 @@ _Please confirm kitchen acceptance and live preparation status!_`;
                     onClick={handlePlaceOrderWhatsApp}
                     className="w-full mt-3 bg-[#163E26] hover:bg-[#1E5635] text-white py-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-75"
                   >
-                    <WhatsAppIcon className="w-5 h-5 fill-white" />
-                    <span>{isSubmitting ? 'Recording Order...' : `Place Order via WhatsApp • ₹${grandTotal}`}</span>
+                    <span>{isSubmitting ? 'Placing Order...' : `Place Order • ₹${grandTotal}`}</span>
+                    <span>&rarr;</span>
                   </button>
                 )}
 
@@ -758,6 +778,8 @@ _Please confirm kitchen acceptance and live preparation status!_`;
           setAuth(user);
           setCustomerName(user.name);
           setCustomerPhone(user.phone);
+          setShowAuthModal(false);
+          submitVerifiedOrder(user);
         }}
         initialName={customerName}
         initialPhone={customerPhone}

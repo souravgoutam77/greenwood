@@ -78,7 +78,7 @@ export const MobileBottomNavigation: React.FC<MobileBottomNavigationProps> = ({
             <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="absolute -top-1.5 -right-2 bg-[#C83A25] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-1 ring-white">
-            {cartCount > 0 ? cartCount : 3}
+            {cartCount}
           </span>
         </div>
         <span className="text-[10px] font-medium tracking-tight">Cart</span>
