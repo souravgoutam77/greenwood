@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "start": "node server/server.mjs",
     "server": "node server/server.mjs",
+    "git:commit": "node scripts/git-sync.mjs",
+    "git:push": "node scripts/git-push.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
