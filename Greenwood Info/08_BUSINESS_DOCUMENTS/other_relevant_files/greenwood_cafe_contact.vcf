@@ -1,0 +1,15 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Greenwood Café & Restaurant
+ORG:Greenwood Café & Restaurant
+TITLE:Pure Vegetarian Restaurant & Café
+TEL;TYPE=WORK,VOICE:+919066906607
+TEL;TYPE=CELL:+919066906607
+EMAIL;TYPE=INTERNET,PREF:greenwoodcafeindia@gmail.com
+ADR;TYPE=WORK:;;Plot No-2, Pocket-6, Sector-A10, Sector A/10, Near Narela Sports Complex;Narela;New Delhi;110040;India
+LABEL;TYPE=WORK:Plot No-2, Pocket-6, Sector-A10, Narela, New Delhi 110040
+GEO:28.8437515;77.1003382
+URL:https://sites.google.com/view/greenwoodcafe/home
+URL;TYPE=Instagram:https://www.instagram.com/greenwoodcafeindia/
+NOTE:100% Pure Vegetarian Restaurant. All main courses prepared in 100% Desi Ghee. Golden birdcage dining pods, family seating, party hosting.
+END:VCARD

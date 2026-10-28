@@ -1,0 +1,47 @@
+{
+  "brand_name": "Greenwood Caf\u00e9 & Restaurant",
+  "location": "Narela, Delhi",
+  "extracted_color_palette": {
+    "primary_brand_green": {
+      "hex": "#1E4D2B",
+      "name": "Forest Emerald Green",
+      "usage": "Primary buttons, lush foliage arches, velvet banquet upholstery, call-to-actions",
+      "source": "Physical interior banquets, moss arches, leaf G signage"
+    },
+    "brand_walnut_brown": {
+      "hex": "#2C1E14",
+      "name": "Deep Walnut Wood",
+      "usage": "Header navigation bar, exterior timber facade slats, dark contrasting elements",
+      "source": "Exterior facade wooden cladding, wooden dining tables"
+    },
+    "background_cream": {
+      "hex": "#FBF8F2",
+      "name": "Warm Natural Cream",
+      "usage": "Website background, card surfaces, clean organic aesthetic",
+      "source": "Warm ambient lighting and official website theme"
+    },
+    "gold_accent": {
+      "hex": "#D4AF37",
+      "name": "Champagne Metallic Gold",
+      "usage": "Subtle accents, decorative dividers, rating badges, gazebo cage metalwork",
+      "source": "Golden birdcage gazebos, circular ceiling chandeliers, official logo champagne vector (#D2C59D)"
+    },
+    "mustard_yellow": {
+      "hex": "#D89A2B",
+      "name": "Warm Turmeric Velvet",
+      "usage": "Secondary warm accents, modern armchair highlights",
+      "source": "Fluted velvet sofas and modern lounge chairs"
+    },
+    "charcoal_black": {
+      "hex": "#1A1A1A",
+      "name": "Architectural Black",
+      "usage": "Body typography, window framing, industrial mesh ceilings",
+      "source": "Window frames, industrial ceiling grid, chalkboard signage"
+    }
+  },
+  "pure_veg_certification": {
+    "color_hex": "#0F8A3C",
+    "symbol": "Green dot inside green square (FSSAI standard)",
+    "promise": "100% Pure Vegetarian, prepared in 100% Desi Ghee"
+  }
+}

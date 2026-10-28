@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-script: 'Great Vibes', 'Alex Brush', 'Dancing Script', cursive;
+
+  --color-warm-cream: #FAF6EE;
+  --color-forest-green: #163E26;
+  --color-forest-dark: #0F2D1B;
+  --color-near-black: #0B130F;
+  --color-walnut: #2B180F;
+  --color-walnut-dark: #1E100A;
+  --color-antique-gold: #C9A45C;
+  --color-gold-light: #E2C27E;
+  --color-caramel: #8F5D2C;
+  --color-botanical-green: #DCE8CB;
+  --color-botanical-dark: #274D2E;
+  --color-heading: #17261D;
+  --color-body: #4B5149;
+  --color-muted: #77766D;
+  --color-border-fine: #E8DDCA;
+  --color-card-surface: #FFFDF8;
+  --color-offer-gold: #F1D58A;
+  --color-price-red: #C83A25;
+}
+
+.font-serif {
+  font-family: 'Playfair Display', Georgia, serif !important;
+}
+
+.font-sans {
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+.font-script {
+  font-family: 'Great Vibes', 'Alex Brush', 'Dancing Script', cursive !important;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #FAF6EE;
+  color: #4B5149;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Hide scrollbar for clean horizontal swipe on mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Realistic Dark Walnut Timber Grain Background */
+.bg-walnut-wood {
+  background-color: #24140D;
+  background-image: 
+    linear-gradient(to bottom, rgba(43, 24, 15, 0.45) 0%, rgba(20, 10, 6, 0.65) 100%),
+    url('/images/walnut-wood-texture.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Subtle Realistic Wood Plank Strip */
+.wood-plank-trim {
+  background-color: #1E100A;
+  background-image: 
+    linear-gradient(to right, rgba(201, 164, 92, 0.15) 0%, transparent 15%, transparent 85%, rgba(201, 164, 92, 0.15) 100%),
+    url('/images/walnut-wood-texture.jpg');
+  background-size: cover;
+}
+
+/* Exact Letter-Masked Logo Specular Shine (Strictly restricted to Greenwood logo letters & leaf) */
+@keyframes logo-letter-shine {
+  0% {
+    transform: translateX(-140%) skewX(-25deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(320%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+@keyframes logo-letter-glow {
+  0% {
+    filter: brightness(1) drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+  }
+  45% {
+    filter: brightness(1.35) drop-shadow(0 0 6px rgba(201, 164, 92, 0.8));
+  }
+  100% {
+    filter: brightness(1) drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+  }
+}
+
+.shine-logo-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.shine-logo-img {
+  animation: logo-letter-glow 2.4s ease-out 0.6s 1 forwards;
+}
+
+/* The shine is MASKED exactly by the logo image so it ONLY appears on the Greenwood letters/symbol */
+.logo-mask-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  -webkit-mask-image: url('/logo-official-trimmed.png');
+  mask-image: url('/logo-official-trimmed.png');
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center left;
+  mask-position: center left;
+  overflow: hidden;
+}
+
+.logo-mask-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.95) 45%,
+    rgba(201, 164, 92, 0.9) 70%,
+    transparent 100%
+  );
+  transform: translateX(-140%) skewX(-25deg);
+  animation: logo-letter-shine 2.2s cubic-bezier(0.25, 1, 0.5, 1) 0.6s 1 forwards;
+}
+
+/* Signature Dish Soft Ambient Breathing Light */
+@keyframes dish-ambient-light {
+  0%, 100% {
+    box-shadow: 0 0 0px rgba(201, 164, 92, 0);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 0 14px 2px rgba(201, 164, 92, 0.35);
+    filter: brightness(1.06);
+  }
+}
+
+.dish-ambient-light {
+  animation: dish-ambient-light 3.6s ease-in-out infinite;
+}
+
+/* Gallery Photo Single-Run Border Animation */
+@keyframes gallery-border-sweep {
+  0% {
+    box-shadow: 0 0 0 0px rgba(201, 164, 92, 0);
+    border-color: rgba(232, 221, 202, 0.8);
+  }
+  30% {
+    box-shadow: 0 0 14px 3px rgba(201, 164, 92, 0.85), inset 0 0 6px 1px rgba(201, 164, 92, 0.5);
+    border-color: rgba(201, 164, 92, 1);
+  }
+  60% {
+    box-shadow: 0 0 16px 2px rgba(46, 90, 58, 0.75);
+    border-color: rgba(46, 90, 58, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 0px rgba(201, 164, 92, 0);
+    border-color: rgba(232, 221, 202, 0.8);
+  }
+}
+
+.gallery-border-sweep-1 {
+  animation: gallery-border-sweep 1.6s ease-out 0.2s 1 forwards;
+}
+.gallery-border-sweep-2 {
+  animation: gallery-border-sweep 1.6s ease-out 0.6s 1 forwards;
+}
+.gallery-border-sweep-3 {
+  animation: gallery-border-sweep 1.6s ease-out 1.0s 1 forwards;
+}
+.gallery-border-sweep-4 {
+  animation: gallery-border-sweep 1.6s ease-out 1.4s 1 forwards;
+}
+
+/* Subtle rich wood grain pattern for header */
+.bg-walnut-grain {
+  background-color: #2B180F;
+  background-image: 
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(rgba(0,0,0,0.2) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 50%, rgba(68,38,23,0.5) 0%, rgba(30,16,10,0.8) 100%);
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* Botanical Vine Framing Styles */
+.leaf-accent {
+  pointer-events: none;
+  user-select: none;
+}
