@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { VegBadge, LeafBranch } from './Icons';
-import { api, type ApiBanner } from '../services/api';
+import { api, ensureFullCatalogue, computeEffectiveStoreStatus, type ApiBanner } from '../services/api';
+import { firestore } from '../services/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 export interface AdminOrderItem {
   name: string;
@@ -198,155 +200,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Live Orders Data (100% Pure Vegetarian)
-  const [orders, setOrders] = useState<AdminOrder[]>([
-    {
-      id: '#GW-8495',
-      status: 'New',
-      placedTime: '2 mins ago',
-      orderType: 'Home Delivery',
-      paymentMode: 'Cash on Delivery',
-      customerName: 'Amit Verma',
-      customerPhone: '+91 98123 45678',
-      customerAddressOrTable: 'Sector 14, Noida, UP (Hub Delivery)',
-      items: [
-        { name: 'Dal Makhani', quantity: 1, price: 249, image: '/images/dish-detail/rec-dal-makhani.jpg' },
-        { name: 'Butter Naan', quantity: 2, price: 118, image: '/images/dish-detail/pairing-butter-naan.jpg' },
-        { name: 'Veg Biryani', quantity: 1, price: 180, image: '/images/dish-detail/pairing-jeera-rice.jpg' },
-      ],
-      specialInstruction: 'Less Spicy / No Extra Butter',
-      total: 540,
-    },
-    {
-      id: '#GW-8492',
-      status: 'Preparing',
-      placedTime: '15 mins ago',
-      prepTime: 'Prep: 18 mins',
-      orderType: 'Dine-in',
-      paymentMode: 'Paid via UPI',
-      customerName: 'Rahul Sharma',
-      customerPhone: '+91 98765 43210',
-      customerAddressOrTable: 'Table No. 4',
-      items: [
-        { name: 'Shahi Paneer Butter Masala', quantity: 1, price: 299, image: '/images/dish-detail/rec-shahi-paneer.jpg' },
-        { name: 'Garlic Naan', quantity: 2, price: 98, image: '/images/dish-detail/pairing-garlic-naan.jpg' },
-        { name: 'Mango Lassi', quantity: 1, price: 129, image: '/images/orders/item3_mango_lassi.jpg' },
-      ],
-      specialInstruction: 'Jain Food (No Onion/Garlic)',
-      total: 526,
-    },
-    {
-      id: '#GW-8488',
-      status: 'New',
-      placedTime: '5 mins ago',
-      orderType: 'Takeaway',
-      paymentMode: 'Paid via UPI',
-      customerName: 'Vikram Malhotra',
-      customerPhone: '+91 98451 23456',
-      customerAddressOrTable: 'Pickup at Narela Counter',
-      items: [
-        { name: 'Farmhouse Pizza', quantity: 1, price: 399, image: '/images/menu/dish-farmhouse-pizza.jpg' },
-        { name: 'Mango Lassi', quantity: 1, price: 129, image: '/images/orders/item3_mango_lassi.jpg' },
-      ],
-      specialInstruction: 'Pack extra oregano & chilli flakes',
-      total: 528,
-    },
-    {
-      id: '#GW-8481',
-      status: 'Out for Delivery',
-      placedTime: '28 mins ago',
-      prepTime: 'ETA: 10-15 mins',
-      orderType: 'Home Delivery',
-      paymentMode: 'Paid via Card',
-      customerName: 'Priya Kapoor',
-      customerPhone: '+91 99901 22334',
-      customerAddressOrTable: 'Pocket 3, Sector A6, Narela, Delhi',
-      items: [
-        { name: 'Paneer Tikka Masala', quantity: 1, price: 279, image: '/images/dish-detail/rec-paneer-tikka-masala.jpg' },
-        { name: 'Jeera Rice', quantity: 1, price: 129, image: '/images/dish-detail/pairing-jeera-rice.jpg' },
-      ],
-      total: 408,
-    },
-    {
-      id: '#GW-8475',
-      status: 'Preparing',
-      placedTime: '20 mins ago',
-      prepTime: 'Prep: 20 mins',
-      orderType: 'Home Delivery',
-      paymentMode: 'Paid via UPI',
-      customerName: 'Rohit Mehra',
-      customerPhone: '+91 98112 33445',
-      customerAddressOrTable: 'Sector B4, Narela Hub Area',
-      items: [
-        { name: 'Dal Makhani', quantity: 1, price: 249, image: '/images/dish-detail/rec-dal-makhani.jpg' },
-        { name: 'Garlic Naan', quantity: 2, price: 98, image: '/images/dish-detail/pairing-garlic-naan.jpg' },
-      ],
-      total: 347,
-    },
-    {
-      id: '#GW-8468',
-      status: 'Completed',
-      placedTime: '45 mins ago',
-      completedTime: 'Completed at 6:50 PM',
-      orderType: 'Dine-in',
-      paymentMode: 'Paid via UPI',
-      customerName: 'Sneha Singh',
-      customerPhone: '+91 98711 44556',
-      customerAddressOrTable: 'Table No. 2',
-      items: [
-        { name: 'Paneer Butter Masala', quantity: 2, price: 598, image: '/images/dish-detail/rec-shahi-paneer.jpg' },
-        { name: 'Garlic Naan', quantity: 2, price: 196, image: '/images/dish-detail/pairing-garlic-naan.jpg' },
-      ],
-      total: 794,
-    },
-    {
-      id: '#GW-8462',
-      status: 'Completed',
-      placedTime: '1 hr ago',
-      completedTime: 'Completed at 6:30 PM',
-      orderType: 'Home Delivery',
-      paymentMode: 'Cash on Delivery',
-      customerName: 'Deepak Gupta',
-      customerPhone: '+91 97182 55667',
-      customerAddressOrTable: 'Pocket 5, Narela Sector A5',
-      items: [
-        { name: 'Dal Makhani', quantity: 1, price: 249, image: '/images/dish-detail/rec-dal-makhani.jpg' },
-        { name: 'Veg Biryani', quantity: 1, price: 180, image: '/images/dish-detail/pairing-jeera-rice.jpg' },
-      ],
-      total: 429,
-    },
-    {
-      id: '#GW-8455',
-      status: 'Declined',
-      placedTime: '1 hr 15 mins ago',
-      orderType: 'Home Delivery',
-      paymentMode: 'Cash on Delivery',
-      customerName: 'Rajesh Kumar',
-      customerPhone: '+91 99100 88776',
-      customerAddressOrTable: 'Alipur Extension (Beyond 15km Limit)',
-      items: [
-        { name: 'Farmhouse Pizza', quantity: 1, price: 399, image: '/images/menu/dish-farmhouse-pizza.jpg' },
-      ],
-      total: 399,
-      declineReason: 'Address location falls outside maximum 15km delivery hub radius.',
-    },
-  ]);
+  // Live Orders Data (Initialized from client storage, real-time synced)
+  const [orders, setOrders] = useState<AdminOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem('gw_orders');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  // Menu Items State (100% Pure Veg)
-  const [menuItems, setMenuItems] = useState<MenuItemData[]>([
-    { id: 'item-1', name: 'Paneer Butter Masala', category: 'North Indian', price: 349, inStock: true, image: '/images/admin/dish_paneer.jpg' },
-    { id: 'item-2', name: 'Farmhouse Pizza', category: 'Pizza & Pasta', price: 399, inStock: true, image: '/images/admin/dish_pizza.jpg' },
-    { id: 'item-3', name: 'Dal Makhani', category: 'North Indian', price: 249, inStock: true, image: '/images/admin/dish_dal.jpg' },
-    { id: 'item-4', name: 'Mango Lassi', category: 'Beverages & Desserts', price: 129, inStock: false, image: '/images/admin/dish_lassi.jpg' },
-    { id: 'item-5', name: 'Garlic Naan', category: 'Breads & Rice', price: 49, inStock: true, image: '/images/admin/dish_naan.jpg' },
-    { id: 'item-6', name: 'Butter Naan', category: 'Breads & Rice', price: 59, inStock: true, image: '/images/dish-detail/pairing-butter-naan.jpg' },
-    { id: 'item-7', name: 'Shahi Paneer Butter Masala', category: 'North Indian', price: 299, inStock: true, image: '/images/dish-detail/rec-shahi-paneer.jpg' },
-    { id: 'item-8', name: 'Veg Biryani', category: 'Breads & Rice', price: 180, inStock: true, image: '/images/dish-detail/pairing-jeera-rice.jpg' },
-    { id: 'item-9', name: 'Paneer Tikka Masala', category: 'North Indian', price: 279, inStock: true, image: '/images/dish-detail/rec-paneer-tikka-masala.jpg' },
-    { id: 'item-10', name: 'Tandoori Tikka Platter', category: 'Starters', price: 299, inStock: true, image: '/images/menu/dish-tandoori-tikka.jpg' },
-    { id: 'item-11', name: 'Steamed Veg Momos', category: 'Starters', price: 199, inStock: true, image: '/images/menu/dish-veg-momos.jpg' },
-    { id: 'item-12', name: 'Gulab Jamun (2 Pcs)', category: 'Beverages & Desserts', price: 99, inStock: true, image: '/images/offers/dessert_bowl.jpg' },
-  ]);
+  // Menu Items State (100% Pure Veg) initialized synchronously from cache
+  const [menuItems, setMenuItems] = useState<MenuItemData[]>(() => ensureFullCatalogue(api.getDishesSync()) as any);
+  const [syncingDishIds, setSyncingDishIds] = useState<Record<string, boolean>>({});
+  const [syncingStoreStatus, setSyncingStoreStatus] = useState(false);
 
   // Load and sync real persistent data from SQLite REST API
   useEffect(() => {
@@ -365,7 +232,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           setOrders(fetchedOrders as any);
         }
         if (fetchedDishes && fetchedDishes.length > 0) {
-          setMenuItems(fetchedDishes as any);
+          setMenuItems(ensureFullCatalogue(fetchedDishes as any) as any);
         }
         if (fetchedBanners && fetchedBanners.length > 0) {
           setBanners(fetchedBanners);
@@ -374,14 +241,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           setAdminPhones(fetchedAdmins);
         }
         if (fetchedSettings) {
-          setIsKitchenOpen(fetchedSettings.is_kitchen_open);
+          setIsKitchenOpen(computeEffectiveStoreStatus(fetchedSettings));
           setHomeDeliveryEnabled(fetchedSettings.home_delivery_enabled);
           setTakeawayEnabled(fetchedSettings.takeaway_enabled);
           setOpeningHours(fetchedSettings.opening_hours || '11:00 AM – 11:00 PM');
           setAvgKitchenPrepTime(fetchedSettings.avg_prep_time || '18 mins');
           setDeliveryRadius(fetchedSettings.delivery_radius || '15 km');
-          setRestaurantPhone(fetchedSettings.restaurant_phone || '+91 98765 43210');
-          setKitchenPhone(fetchedSettings.kitchen_phone || '+91 98123 45678');
+          setRestaurantPhone(fetchedSettings.restaurant_phone || '+91 9066906607');
+          setKitchenPhone(fetchedSettings.kitchen_phone || '+91 8802325537');
           setAudioAlerts(fetchedSettings.audio_alerts ?? true);
         }
       } catch (err) {
@@ -391,23 +258,106 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     loadInitialData();
 
-    // Poll orders every 4 seconds for live restaurant management
-    const interval = setInterval(async () => {
+    // Live Firestore onSnapshot listeners for orders & dishes
+    let unsubscribeOrders: (() => void) | null = null;
+    let unsubscribeDishes: (() => void) | null = null;
+
+    if (firestore) {
+      try {
+        const ordersRef = collection(firestore, 'orders');
+        unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
+          if (!snapshot.empty) {
+            const live: any[] = [];
+            snapshot.forEach((doc) => live.push({ id: doc.id, ...doc.data() }));
+            if (isMounted) setOrders(live);
+          }
+        }, (err) => console.warn('[Admin POS] Firestore orders sync notice:', err));
+
+        const dishesRef = collection(firestore, 'dishes');
+        unsubscribeDishes = onSnapshot(dishesRef, (snapshot) => {
+          if (!snapshot.empty) {
+            const liveDishes: any[] = [];
+            snapshot.forEach((doc) => liveDishes.push({ id: doc.id, ...doc.data() }));
+            if (isMounted) {
+              // Merge live Firestore updates by ID with existing catalogue so dishes NEVER vanish!
+              setMenuItems((prev) => {
+                const liveMap = new Map(liveDishes.map((d) => [d.id, d]));
+                const merged = prev.map((item) => {
+                  const update = liveMap.get(item.id);
+                  return update ? { ...item, ...update } : item;
+                });
+                liveDishes.forEach((ld) => {
+                  if (!prev.some((p) => p.id === ld.id)) {
+                    merged.push(ld);
+                  }
+                });
+                return ensureFullCatalogue(merged as any) as any;
+              });
+            }
+          }
+        }, (err) => console.warn('[Admin POS] Firestore dishes sync notice:', err));
+      } catch (err) {
+        console.warn('[Admin POS] Firestore listener init notice:', err);
+      }
+    }
+
+    // Instant local custom events sync across tabs & BroadcastChannel
+    const handleLocalOrderChange = async () => {
       try {
         const freshOrders = await api.getOrders();
-        if (isMounted && freshOrders && freshOrders.length > 0) {
+        if (isMounted && freshOrders) {
           setOrders(freshOrders as any);
         }
-      } catch {
-        // silent poll retry
+      } catch {}
+    };
+
+    const handleLocalDishesChange = () => {
+      if (isMounted) {
+        setMenuItems(ensureFullCatalogue(api.getDishesSync()) as any);
       }
-    }, 4000);
+    };
+
+    window.addEventListener('gw_orders_changed', handleLocalOrderChange);
+    window.addEventListener('gw_dishes_changed', handleLocalDishesChange);
+    window.addEventListener('storage', handleLocalOrderChange);
+    window.addEventListener('storage', handleLocalDishesChange);
+
+    let bc: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        bc = new BroadcastChannel('gw_sync_channel');
+        bc.onmessage = (ev) => {
+          if (ev.data?.event === 'gw_dishes_changed') {
+            handleLocalDishesChange();
+          } else if (ev.data?.event === 'gw_orders_changed') {
+            handleLocalOrderChange();
+          }
+        };
+      } catch {}
+    }
+
+    // Fallback polling (relaxed from aggressive 2s to 20s)
+    const interval = setInterval(handleLocalOrderChange, 20000);
 
     return () => {
       isMounted = false;
+      if (unsubscribeOrders) unsubscribeOrders();
+      if (unsubscribeDishes) unsubscribeDishes();
+      if (bc) bc.close();
+      window.removeEventListener('gw_orders_changed', handleLocalOrderChange);
+      window.removeEventListener('gw_dishes_changed', handleLocalDishesChange);
+            window.removeEventListener('storage', handleLocalOrderChange);
+      window.removeEventListener('storage', handleLocalDishesChange);
       clearInterval(interval);
     };
   }, []);
+
+  // Instant refresh whenever activeSection switches
+  useEffect(() => {
+    api.getOrders().then((fresh) => {
+      if (fresh) setOrders(fresh as any);
+    }).catch(() => {});
+  }, [activeSection]);
 
   // Admin Login & Logout handlers
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -533,21 +483,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleToggleTrending = async (dishId: string) => {
-    let nextState = false;
+    if (syncingDishIds[dishId]) return;
+
+    const currentItem = menuItems.find((i) => i.id === dishId);
+    if (!currentItem) return;
+
+    const nextState = !currentItem.isTrending;
+    setSyncingDishIds((prev) => ({ ...prev, [dishId]: true }));
+    showToast(`⏳ Updating "${currentItem.name}" on live website...`);
+
+    // Immediate local optimistic update
     setMenuItems((prev) =>
       prev.map((item) => {
         if (item.id === dishId) {
-          nextState = !item.isTrending;
-          showToast(`${item.name} is ${nextState ? 'now Trending 🔥' : 'removed from Trending'}`);
           return { ...item, isTrending: nextState };
         }
         return item;
       })
     );
+
     try {
       await api.updateDish(dishId, { isTrending: nextState });
+      showToast(
+        nextState
+          ? `✓ "${currentItem.name}" is now LIVE in Signature & Trending on Homepage!`
+          : `✓ "${currentItem.name}" is now set to Normal.`
+      );
     } catch (err) {
       console.error('Failed to sync trending status to API:', err);
+      showToast(`⚠️ Sync notice for ${currentItem.name}, updated locally.`);
+    } finally {
+      setSyncingDishIds((prev) => {
+        const next = { ...prev };
+        delete next[dishId];
+        return next;
+      });
+    }
+  };
+
+  const handleToggleStoreStatus = async () => {
+    if (syncingStoreStatus) return;
+    const nextState = !isKitchenOpen;
+    setSyncingStoreStatus(true);
+    setIsKitchenOpen(nextState);
+    showToast(
+      nextState
+        ? '✓ Store is now OPEN (11:00 AM – 11:00 PM) • Accepting online orders!'
+        : '⚠️ Store is now CLOSED • Online order intake paused.'
+    );
+    try {
+      await api.updateSettings({
+        is_kitchen_open: nextState,
+        manual_override: true,
+        manual_override_time: new Date().toISOString(),
+        opening_hours: openingHours || '11:00 AM – 11:00 PM',
+      });
+    } catch (err) {
+      console.error('Failed to sync store status to API:', err);
+    } finally {
+      setSyncingStoreStatus(false);
     }
   };
 
@@ -569,21 +563,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleToggleMenuAvailability = async (dishId: string) => {
-    let nextState = true;
+    if (syncingDishIds[dishId]) return;
+
+    const currentItem = menuItems.find((i) => i.id === dishId);
+    if (!currentItem) return;
+
+    const nextState = !currentItem.inStock;
+    setSyncingDishIds((prev) => ({ ...prev, [dishId]: true }));
+    showToast(`⏳ Updating stock status for "${currentItem.name}"...`);
+
     setMenuItems((prev) =>
       prev.map((item) => {
         if (item.id === dishId) {
-          nextState = !item.inStock;
-          showToast(`${item.name} is now ${nextState ? 'In Stock 🟢' : 'Sold Out 🔴'}`);
           return { ...item, inStock: nextState };
         }
         return item;
       })
     );
+
     try {
       await api.updateDish(dishId, { inStock: nextState });
+      showToast(`✓ "${currentItem.name}" is now ${nextState ? 'In Stock 🟢' : 'Sold Out 🔴'}`);
     } catch (err) {
       console.error('Failed to sync dish stock status to API:', err);
+    } finally {
+      setSyncingDishIds((prev) => {
+        const next = { ...prev };
+        delete next[dishId];
+        return next;
+      });
     }
   };
 
@@ -1027,24 +1035,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
 
-        {/* Center: Live Operational Status */}
-        <div className="hidden md:flex items-center gap-3 text-xs">
+        {/* Simple & Small Store Status Icon Button (Auto 11 AM – 11 PM + Manual Toggle) */}
+        <div className="flex items-center gap-2 text-xs">
           <button
             type="button"
-            onClick={() => {
-              const nextState = !isKitchenOpen;
-              setIsKitchenOpen(nextState);
-              showToast(`Kitchen is now: ${nextState ? 'Open 🟢' : 'Paused 🔴'}`);
-            }}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
-              isKitchenOpen
-                ? 'bg-[#163E26] border-[#2D7344] text-[#DCE8CB]'
-                : 'bg-[#C83A25]/20 border-[#C83A25]/60 text-[#FCA5A5]'
+            disabled={syncingStoreStatus}
+            onClick={handleToggleStoreStatus}
+            title={
+              syncingStoreStatus
+                ? 'Updating store status...'
+                : isKitchenOpen
+                ? 'Store: OPEN (Auto 11 AM – 11 PM). Click to Close manually.'
+                : 'Store: CLOSED. Click to Open manually.'
+            }
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 ${
+              syncingStoreStatus
+                ? 'opacity-70 cursor-wait bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]'
+                : isKitchenOpen
+                ? 'bg-[#163E26] border-[#2D7344] text-[#DCE8CB] hover:bg-[#1E5233]'
+                : 'bg-[#C83A25] border-[#EF4444] text-white hover:bg-[#B0301E]'
             }`}
           >
-            <span className={`w-2 h-2 rounded-full ${isKitchenOpen ? 'bg-[#4ADE80]' : 'bg-[#EF4444]'}`} />
-            <span className="font-semibold text-[11px]">
-              {isKitchenOpen ? 'Kitchen Open & Taking Orders' : 'Kitchen Paused'}
+            {/* Simple Small Storefront Icon */}
+            <svg
+              className="w-3.5 h-3.5 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 3h20" />
+              <path d="M3 3v4a3 3 0 0 0 6 0V3" />
+              <path d="M9 3v4a3 3 0 0 0 6 0V3" />
+              <path d="M15 3v4a3 3 0 0 0 6 0V3" />
+              <path d="M4 11v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9" />
+              <path d="M9 21v-6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v6" />
+            </svg>
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isKitchenOpen ? 'bg-[#4ADE80] animate-pulse' : 'bg-white'
+              }`}
+            />
+            <span className="text-[11px] font-bold">
+              {syncingStoreStatus ? 'Updating...' : isKitchenOpen ? 'Open' : 'Closed'}
             </span>
           </button>
 
@@ -1799,7 +1834,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </span>
                     {[
                       { id: 'All', label: 'All Items' },
-                      { id: 'Trending', label: '🔥 Trending Only' },
+                      { id: 'Trending', label: 'Signature & Trending Only' },
                       { id: 'In Stock', label: '🟢 In Stock' },
                       { id: 'Sold Out', label: '🔴 Sold Out' },
                     ].map((tag) => (
@@ -1819,8 +1854,122 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Table */}
-                <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] overflow-hidden shadow-xs">
+                {/* Mobile View: Cards list (No horizontal clipping, Full Dish visibility) */}
+                <div className="sm:hidden space-y-3">
+                  {filteredMenuItems.length === 0 ? (
+                    <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-6 text-center text-xs text-[#77766D]">
+                      No vegetarian dishes found matching the selected filter.
+                    </div>
+                  ) : (
+                    filteredMenuItems.map((dish) => (
+                      <div
+                        key={`m-${dish.id}`}
+                        className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-3.5 shadow-2xs space-y-2.5"
+                      >
+                        {/* Top: Image, Name, Category & Edit */}
+                        <div className="flex items-start gap-2.5">
+                          <img
+                            src={dish.image}
+                            alt={dish.name}
+                            className="w-14 h-14 rounded-lg object-cover border border-[#E8DDCA] shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/images/dish-detail/rec-dal-makhani.jpg';
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <VegBadge />
+                              <h3 className="font-bold text-sm text-[#17261D] leading-tight">
+                                {dish.name}
+                              </h3>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="bg-[#FAF6EE] text-[#8F5D2C] border border-[#E8DDCA] px-2 py-0.5 rounded-full text-[10px] font-medium">
+                                {dish.category}
+                              </span>
+                              <span className="font-bold text-sm text-[#17261D]">
+                                ₹{dish.price}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditDishForm({ ...dish });
+                              setActiveModal({ type: 'edit-dish', title: `Edit ${dish.name}`, dish });
+                            }}
+                            className="text-xs font-semibold text-[#163E26] hover:text-[#C9A45C] px-2.5 py-1 rounded border border-[#E8DDCA] cursor-pointer shrink-0"
+                          >
+                            Edit
+                          </button>
+                        </div>
+
+                        {/* Controls: Stock Toggle & Signature & Trending Toggle */}
+                        <div className="pt-2 border-t border-[#E8DDCA]/60 flex items-center justify-between gap-2">
+                          {/* Stock Toggle */}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              role="switch"
+                              disabled={!!syncingDishIds[dish.id]}
+                              aria-checked={dish.inStock}
+                              onClick={() => handleToggleMenuAvailability(dish.id)}
+                              className={`w-9 h-5 rounded-full relative shrink-0 p-0.5 ${
+                                syncingDishIds[dish.id] ? 'opacity-60 cursor-wait' : 'cursor-pointer'
+                              } ${dish.inStock ? 'bg-[#163E26]' : 'bg-[#E0D8CB]'}`}
+                            >
+                              <span
+                                className={`block w-4 h-4 rounded-full bg-white shadow-xs transform transition-transform ${
+                                  dish.inStock ? 'translate-x-4' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-[11px] font-bold ${dish.inStock ? 'text-[#168039]' : 'text-[#C83A25]'}`}>
+                              {dish.inStock ? 'In Stock' : 'Sold Out'}
+                            </span>
+                          </div>
+
+                          {/* Signature & Trending Toggle Button */}
+                          <button
+                            type="button"
+                            disabled={!!syncingDishIds[dish.id]}
+                            onClick={() => handleToggleTrending(dish.id)}
+                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all shrink-0 ${
+                              syncingDishIds[dish.id]
+                                ? 'bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B] animate-pulse cursor-wait'
+                                : dish.isTrending
+                                ? 'bg-[#E8F3EB] text-[#163E26] border border-[#2E5A3A] shadow-2xs font-bold'
+                                : 'bg-[#FAF6EE] text-[#77766D] border border-[#E8DDCA]'
+                            }`}
+                          >
+                            {syncingDishIds[dish.id] ? (
+                              <>
+                                <svg className="animate-spin -ml-0.5 mr-0.5 h-3 w-3 text-[#92400E]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                </svg>
+                                <span>Going Live...</span>
+                              </>
+                            ) : dish.isTrending ? (
+                              <>
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#163E26]" />
+                                <span>Signature &amp; Trending</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#A89885]" />
+                                <span>Normal</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Desktop & Tablet Table (>=sm screens) */}
+                <div className="hidden sm:block bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] overflow-hidden shadow-xs">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-[#FAF6EE] text-[#77766D] border-b border-[#E8DDCA] text-[11px] uppercase tracking-wider font-semibold">
@@ -1829,7 +1978,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <th className="py-2.5 px-3 sm:px-4">Category</th>
                           <th className="py-2.5 px-3 sm:px-4">Price</th>
                           <th className="py-2.5 px-3 sm:px-4">Stock</th>
-                          <th className="py-2.5 px-3 sm:px-4">Trending 🔥</th>
+                          <th className="py-2.5 px-3 sm:px-4">Signature &amp; Trending</th>
                           <th className="py-2.5 px-3 sm:px-4 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -1851,8 +2000,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <VegBadge />
                                     <span>{dish.name}</span>
                                     {dish.isTrending && (
-                                      <span className="bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B] text-[9px] font-bold px-1.5 py-0.2 rounded-full">
-                                        🔥 Trending
+                                      <span className="bg-[#E8F3EB] text-[#163E26] border border-[#2E5A3A] text-[9px] font-bold px-1.5 py-0.2 rounded-full">
+                                        Signature &amp; Trending
                                       </span>
                                     )}
                                   </div>
@@ -1876,9 +2025,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <button
                                   type="button"
                                   role="switch"
+                                  disabled={!!syncingDishIds[dish.id]}
                                   aria-checked={dish.inStock}
                                   onClick={() => handleToggleMenuAvailability(dish.id)}
-                                  className={`w-9 h-5 rounded-full relative shrink-0 p-0.5 cursor-pointer ${
+                                  className={`w-9 h-5 rounded-full relative shrink-0 p-0.5 ${
+                                    syncingDishIds[dish.id] ? 'opacity-60 cursor-wait' : 'cursor-pointer'
+                                  } ${
                                     dish.inStock ? 'bg-[#163E26]' : 'bg-[#E0D8CB]'
                                   }`}
                                 >
@@ -1897,15 +2049,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <td className="py-2.5 px-3 sm:px-4">
                               <button
                                 type="button"
+                                disabled={!!syncingDishIds[dish.id]}
                                 onClick={() => handleToggleTrending(dish.id)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
-                                  dish.isTrending
-                                    ? 'bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B] shadow-2xs'
-                                    : 'bg-[#FAF6EE] text-[#77766D] border border-[#E8DDCA] hover:border-[#F59E0B]'
+                                title={
+                                  syncingDishIds[dish.id]
+                                    ? 'Updating live website...'
+                                    : dish.isTrending
+                                    ? 'Currently in Signature & Trending on Homepage. Click to make Normal'
+                                    : 'Click to feature in Signature & Trending on Homepage'
+                                }
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                                  syncingDishIds[dish.id]
+                                    ? 'bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B] animate-pulse cursor-wait'
+                                    : dish.isTrending
+                                    ? 'bg-[#E8F3EB] text-[#163E26] border border-[#2E5A3A] shadow-2xs font-bold hover:bg-[#D5EADB] cursor-pointer'
+                                    : 'bg-[#FAF6EE] text-[#77766D] border border-[#E8DDCA] hover:border-[#163E26] hover:text-[#163E26] cursor-pointer'
                                 }`}
                               >
-                                <span>🔥</span>
-                                <span>{dish.isTrending ? 'Trending' : 'Normal'}</span>
+                                {syncingDishIds[dish.id] ? (
+                                  <>
+                                    <svg className="animate-spin -ml-0.5 mr-0.5 h-3 w-3 text-[#92400E]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                    </svg>
+                                    <span className="font-bold">Going Live...</span>
+                                  </>
+                                ) : dish.isTrending ? (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#163E26]" />
+                                    <span>Signature &amp; Trending</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#A89885]" />
+                                    <span>Normal</span>
+                                  </>
+                                )}
                               </button>
                             </td>
 
@@ -2055,31 +2234,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     Ordering Availability
                   </h2>
 
-                  {/* Kitchen Status Toggle */}
-                  <div className="flex items-center justify-between py-1.5">
-                    <div>
-                      <div className="text-xs sm:text-sm font-bold text-[#17261D]">
-                        Kitchen Operations (Accepting Online Orders)
+                  {/* Store Status Toggle */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#FAF6EE] border border-[#E8DDCA] flex items-center justify-center text-[#163E26] shrink-0 mt-0.5">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M2 3h20" />
+                          <path d="M3 3v4a3 3 0 0 0 6 0V3" />
+                          <path d="M9 3v4a3 3 0 0 0 6 0V3" />
+                          <path d="M15 3v4a3 3 0 0 0 6 0V3" />
+                          <path d="M4 11v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9" />
+                          <path d="M9 21v-6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v6" />
+                        </svg>
                       </div>
-                      <p className="text-xs text-[#77766D]">
-                        Pause online order intake during kitchen rush or break hours.
-                      </p>
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-[#17261D] flex items-center gap-2">
+                          <span>Store Status (Online Orders)</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${isKitchenOpen ? 'bg-[#E8F3EB] text-[#163E26] border border-[#2E5A3A]' : 'bg-[#FEE2E2] text-[#991B1B] border border-[#EF4444]'}`}>
+                            {isKitchenOpen ? '● OPEN' : '● CLOSED'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#77766D] mt-0.5">
+                          Timing: <strong>{openingHours || '11:00 AM – 11:00 PM'}</strong>. Toggle off during rush hours or store closing.
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
                       role="switch"
+                      disabled={syncingStoreStatus}
                       aria-checked={isKitchenOpen}
-                      onClick={async () => {
-                        const next = !isKitchenOpen;
-                        setIsKitchenOpen(next);
-                        showToast(`Kitchen: ${next ? 'Open 🟢' : 'Paused 🔴'}`);
-                        try {
-                          await api.updateSettings({ is_kitchen_open: next });
-                        } catch (err) {
-                          console.error('Failed to sync kitchen status:', err);
-                        }
-                      }}
-                      className={`w-11 h-6 rounded-full relative shrink-0 p-0.5 cursor-pointer ${
+                      onClick={handleToggleStoreStatus}
+                      className={`w-11 h-6 rounded-full relative shrink-0 p-0.5 cursor-pointer transition-colors ${
                         isKitchenOpen ? 'bg-[#163E26]' : 'bg-[#E0D8CB]'
                       }`}
                     >
@@ -2172,12 +2358,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     <div>
-                      <label className="font-semibold text-[#77766D] block mb-1">Opening Hours</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-semibold text-[#77766D] block">Opening Hours</label>
+                        <button
+                          type="button"
+                          onClick={() => setOpeningHours('11:00 AM – 11:00 PM')}
+                          className="text-[10px] text-[#163E26] hover:underline font-semibold cursor-pointer"
+                        >
+                          Reset to 11-11
+                        </button>
+                      </div>
                       <input
                         type="text"
                         value={openingHours}
                         onChange={(e) => setOpeningHours(e.target.value)}
-                        className="w-full bg-[#FAF6EE] px-3 py-1.5 rounded-lg border border-[#E8DDCA] focus:outline-none"
+                        placeholder="11:00 AM – 11:00 PM"
+                        className="w-full bg-[#FAF6EE] px-3 py-1.5 rounded-lg border border-[#E8DDCA] focus:outline-none font-semibold text-[#17261D]"
                       />
                     </div>
                     <div>
@@ -2850,19 +3046,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div className="flex items-center justify-between pt-1 border-t border-[#E8DDCA]/50">
                   <div>
-                    <span className="text-xs font-semibold text-[#17261D] block">Trending Specialty 🔥</span>
-                    <span className="text-[10px] text-[#77766D]">Highlight on customer home & signature dishes</span>
+                    <span className="text-xs font-semibold text-[#17261D] block">Signature &amp; Trending</span>
+                    <span className="text-[10px] text-[#77766D]">Highlight on customer homepage under Signature &amp; Trending</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setEditDishForm({ ...editDishForm, isTrending: !editDishForm.isTrending })}
                     className={`px-3 py-1 rounded-full text-xs font-bold cursor-pointer ${
                       editDishForm.isTrending
-                        ? 'bg-[#FEF3C7] text-[#92400E] border border-[#F59E0B]'
+                        ? 'bg-[#E8F3EB] text-[#163E26] border border-[#2E5A3A]'
                         : 'bg-[#FAF6EE] text-[#77766D] border border-[#E8DDCA]'
                     }`}
                   >
-                    {editDishForm.isTrending ? '🔥 Trending' : 'Normal'}
+                    {editDishForm.isTrending ? 'Signature & Trending' : 'Normal'}
                   </button>
                 </div>
               </div>
@@ -2946,8 +3142,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div className="flex items-center justify-between pt-1 border-t border-[#E8DDCA]/50">
                   <div>
-                    <span className="text-xs font-semibold text-[#17261D] block">Mark as Trending Signature Dish 🔥</span>
-                    <span className="text-[10px] text-[#77766D]">Display in Trending section immediately</span>
+                    <span className="text-xs font-semibold text-[#17261D] block">Feature in Signature &amp; Trending</span>
+                    <span className="text-[10px] text-[#77766D]">Display in Homepage "Signature &amp; Trending" showcase</span>
                   </div>
                   <input
                     type="checkbox"

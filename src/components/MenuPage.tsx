@@ -62,7 +62,7 @@ export const MenuPage: React.FC<MenuPageProps> = ({
       }
     };
     fetchStock();
-    const interval = setInterval(fetchStock, 4000);
+    const interval = setInterval(fetchStock, 15000);
     return () => {
       isMounted = false;
       clearInterval(interval);

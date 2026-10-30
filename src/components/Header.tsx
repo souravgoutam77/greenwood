@@ -4,7 +4,7 @@ import type { Dish } from '../data/restaurantData';
 import { SEARCHABLE_MENU } from '../data/searchableMenu';
 import type { SearchableMenuItem } from '../data/searchableMenu';
 import { VegBadge, WhatsAppIcon } from './Icons';
-import { isAdminLoggedIn } from '../services/auth';
+import { isAdminLoggedIn, getCustomerAuth, type CustomerAuth } from '../services/auth';
 
 interface HeaderProps {
   onNavClick: (href: string) => void;
@@ -17,8 +17,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onNavClick,
   onAddToCart,
-  onCartClick,
-  cartCount = 0,
+  onCartClick: _onCartClick,
+  cartCount: _cartCount = 0,
   activeNav,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -26,6 +26,21 @@ export const Header: React.FC<HeaderProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [addedToast, setAddedToast] = useState<string | null>(null);
+  const [userAuth, setUserAuth] = useState<CustomerAuth | null>(() => getCustomerAuth());
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => isAdminLoggedIn());
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setUserAuth(getCustomerAuth());
+      setIsAdmin(isAdminLoggedIn());
+    };
+    window.addEventListener('gw_auth_changed', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+    return () => {
+      window.removeEventListener('gw_auth_changed', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+    };
+  }, []);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
@@ -85,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="relative w-full bg-walnut-wood text-[#FAF6EE] shadow-md z-40 border-b border-[#C9A45C]/35">
+    <header className="relative w-full bg-[#24140D] text-[#FAF6EE] shadow-md z-40 border-b border-[#C9A45C]/35">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-13 sm:h-14 md:h-14 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Left: Brand Identity with Shine Animation */}
@@ -98,11 +113,11 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center shrink-0 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A45C] rounded-lg p-0.5 transition-transform"
           aria-label="Greenwood Café Home"
         >
-          <div className="shine-logo-wrapper relative">
+          <div className="shine-logo-wrapper">
             <img
               src="/logo-official-trimmed.png"
               alt="Greenwood Café"
-              className="shine-logo-img h-7 sm:h-8 md:h-8.5 w-auto object-contain group-hover:scale-102 transition-transform duration-300"
+              className="shine-logo-img h-7 sm:h-8 md:h-8.5 w-auto object-contain"
             />
             <div className="logo-mask-shine" aria-hidden="true" />
           </div>
@@ -145,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Desktop Search Dropdown */}
           {isSearchFocused && query.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-[#1C1009] border border-[#C9A45C]/40 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-[#1C1009] border border-[#C9A45C]/40 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
               <div className="p-2.5 bg-[#140B06] border-b border-[#2C190F] flex items-center justify-between text-[11px] text-[#C9A45C]">
                 <span className="font-semibold uppercase tracking-wider">
                   Menu Results ({searchResults.length})
@@ -240,32 +255,32 @@ export const Header: React.FC<HeaderProps> = ({
             </svg>
           </button>
 
-          {/* Cart Icon Button with dynamic badge */}
-          <button
-            type="button"
-            onClick={onCartClick}
-            className="relative p-2 text-[#FAF6EE] hover:text-[#C9A45C] focus:outline-none focus:ring-2 focus:ring-[#C9A45C] rounded-md transition-colors"
-            aria-label="View food cart"
-          >
-            <svg className="w-5 h-5 sm:w-5.5 sm:h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-            <span className="absolute top-1 right-1 bg-[#C9A45C] text-[#163E26] text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-[#2B180F]">
-              {cartCount}
-            </span>
-          </button>
+          {/* Desktop Staff Admin Shortcut Button for Authorized Admins */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => handleLinkClick('#admin')}
+              className="hidden md:inline-flex items-center gap-1.5 bg-[#C9A45C]/20 hover:bg-[#C9A45C]/30 text-[#E5DCB8] hover:text-white px-2.5 py-1 rounded-full border border-[#C9A45C]/60 text-xs font-semibold transition-all cursor-pointer shadow-2xs ml-1"
+              title="Kitchen POS & Staff Admin Portal"
+            >
+              <span className="text-xs">🔑</span>
+              <span>Staff Admin</span>
+            </button>
+          )}
 
-          {/* User Profile / My Account Pill (Desktop) matching reference mockup */}
+          {/* User Profile / My Account Pill (Desktop) */}
           <button
             type="button"
             onClick={() => handleLinkClick('#profile')}
             className="hidden md:flex items-center gap-1.5 bg-[#FAF6EE]/10 hover:bg-[#FAF6EE]/20 px-2.5 py-1 rounded-full border border-[#C9A45C]/40 text-xs text-[#FAF6EE] transition-colors ml-1 cursor-pointer"
             title="My Account & Profile"
           >
-            <div className="w-5 h-5 rounded-full bg-[#C9A45C] text-[#2B180F] font-bold text-[10px] flex items-center justify-center">
-              R
+            <div className="w-5 h-5 rounded-full bg-[#C9A45C] text-[#2B180F] font-bold text-[10px] flex items-center justify-center uppercase">
+              {userAuth?.name?.charAt(0) || 'G'}
             </div>
-            <span className="font-medium text-xs text-[#FAF6EE]">Rahul</span>
+            <span className="font-medium text-xs text-[#FAF6EE] max-w-[90px] truncate">
+              {userAuth?.name ? userAuth.name.split(' ')[0] : 'Profile'}
+            </span>
             <svg className="w-3 h-3 text-[#C9A45C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
             </svg>
@@ -443,7 +458,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           <div className="pt-2 text-xs text-[#9B8C7E] px-3">
-            Open daily: 11:00 AM - 11:30 PM • Narela, Delhi
+            Open daily: 11:00 AM – 11:00 PM • Narela, Delhi
           </div>
         </div>
       )}

@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
-import { LeafBranch, VegBadge, WhatsAppIcon } from './Icons';
+import { LeafBranch, WhatsAppIcon } from './Icons';
 
 interface AboutPageProps {
   onNavigateToMenu: () => void;
   onNavigateToContact: () => void;
-  onNavigateToGallery?: () => void;
 }
 
 export const AboutPage: React.FC<AboutPageProps> = ({
   onNavigateToMenu,
   onNavigateToContact: _onNavigateToContact,
-  onNavigateToGallery,
 }) => {
   const [mobileStoryExpanded, setMobileStoryExpanded] = useState(false);
 
@@ -23,84 +21,24 @@ export const AboutPage: React.FC<AboutPageProps> = ({
     <div className="w-full bg-[#FAF6EE] min-h-screen text-[#4B5149] font-sans antialiased pb-20 md:pb-12">
 
       {/* ========================================================= */}
-      {/* SECTION A — PAGE HERO                                     */}
+      {/* 1. HEADER HERO (Clean & Elegant)                          */}
       {/* ========================================================= */}
-      <section
-        className="relative w-full min-h-[380px] sm:min-h-[460px] md:min-h-[520px] lg:min-h-[560px] overflow-hidden flex items-center justify-start bg-[#2B180F]"
-        aria-label="About Greenwood Hero"
-      >
-        {/* Real High-Resolution Panoramic Dining Room Image */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="/images/hero-bg-2400.jpg"
-            alt="Greenwood Café & Restaurant botanical fine-dining hall with glowing neon leaf and lush ivy"
-            className="w-full h-full object-cover object-center scale-102 filter brightness-[0.92]"
-            loading="eager"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/images/real/real-dining-hall.jpg';
-            }}
-          />
-          {/* Subtle Ambient Gold & Dark Gradient Vignette for Readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0B130F]/85 via-[#0B130F]/45 to-transparent md:to-[#0B130F]/20 pointer-events-none" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#FAF6EE] via-transparent to-black/30 pointer-events-none" />
-        </div>
-
-        {/* Floating Content Card (Matches Design Mockup Exactly) */}
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 md:py-16">
-          <div className="max-w-xl md:max-w-2xl bg-[#FAF6EE] rounded-2xl sm:rounded-3xl border border-[#E8DDCA] p-6 sm:p-8 md:p-10 shadow-xl">
-            
-            {/* Eyebrow */}
-            <div className="inline-flex items-center gap-2 mb-2 sm:mb-3">
-              <span className="font-serif italic text-sm sm:text-base text-[#8F5D2C]">
-                About
-              </span>
-              <span className="h-0.5 w-6 bg-[#C9A45C]" />
-              <span className="text-[10px] sm:text-xs font-bold tracking-[0.22em] text-[#C9A45C] uppercase">
-                WELCOME TO GREENWOOD
-              </span>
-            </div>
-
-            {/* Main Headings */}
-            <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#163E26] tracking-tight leading-[1.08] mb-1.5 sm:mb-2">
-              Good Food. Greener Moods.
-            </h1>
-
-            <p className="font-sans text-[10px] sm:text-xs font-bold tracking-[0.2em] text-[#8F5D2C] uppercase mb-3 sm:mb-4">
-              A FINE-DINE FAMILY RESTAURANT IN NARELA
-            </p>
-
-            <p className="text-xs sm:text-sm md:text-base text-[#4B5149] leading-relaxed mb-5 sm:mb-6">
-              A fine-dine family restaurant in Narela, bringing people together over pure vegetarian food, lush botanical ambience, and memorable moments.
-            </p>
-
-            {/* 3 Verified Badge Pills (Direct from Design Reference) */}
-            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap pt-1">
-              {/* Badge 1: 100% Vegetarian */}
-              <div className="inline-flex items-center gap-1.5 bg-[#FFFDF8] border border-[#2E5A3A]/40 px-3 py-1.5 rounded-full shadow-2xs">
-                <VegBadge />
-                <span className="text-[11px] sm:text-xs font-bold text-[#163E26]">
-                  100% Vegetarian
-                </span>
-              </div>
-
-              {/* Badge 2: Fresh Vegetables */}
-              <div className="inline-flex items-center gap-1.5 bg-[#FFFDF8] border border-[#C9A45C]/60 px-3 py-1.5 rounded-full shadow-2xs">
-                <span className="text-xs">🥕</span>
-                <span className="text-[11px] sm:text-xs font-semibold text-[#6E4F1B]">
-                  Fresh Vegetables
-                </span>
-              </div>
-
-              {/* Badge 3: 100% Desi Ghee */}
-              <div className="inline-flex items-center gap-1.5 bg-[#FFFDF8] border border-[#2E5A3A]/40 px-3 py-1.5 rounded-full shadow-2xs">
-                <span className="text-xs">🍲</span>
-                <span className="text-[11px] sm:text-xs font-bold text-[#163E26]">
-                  100% Desi Ghee
-                </span>
-              </div>
-            </div>
-
+      <section className="relative overflow-hidden pt-8 pb-8 sm:pb-10 bg-gradient-to-b from-[#FAF6EE] to-[#FFFDF8] border-b border-[#E8DDCA] text-center">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="inline-flex items-center justify-center gap-2 text-[#163E26] mb-2">
+            <LeafBranch flip={false} className="w-5 h-2.5" />
+            <span className="font-serif text-xs sm:text-sm tracking-widest uppercase font-semibold text-[#163E26]">
+              Our Story &amp; Ambience
+            </span>
+            <LeafBranch flip={true} className="w-5 h-2.5" />
           </div>
+
+          <h1 className="font-serif text-3xl sm:text-5xl font-bold text-[#17261D] tracking-tight mb-2">
+            About Greenwood Café
+          </h1>
+          <p className="text-xs sm:text-sm text-[#77766D] max-w-xl mx-auto font-sans leading-relaxed">
+            A fine-dine vegetarian family restaurant in Narela, Delhi, bringing people together over pure food, lush botanical ambience, and memorable moments.
+          </p>
         </div>
       </section>
 
@@ -179,7 +117,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
           <div className="lg:col-span-4 order-3">
             <div className="relative group overflow-hidden rounded-2xl sm:rounded-3xl border border-[#E8DDCA] shadow-md bg-[#FFFDF8]">
               <img
-                src="/images/dish-detail/butter-paneer-thumb-4.jpg"
+                src="/images/dish-detail/real-butter-paneer-hero.jpg"
                 alt="Greenwood signature rich Paneer Butter Masala prepared with 100% desi ghee"
                 className="w-full h-64 sm:h-72 lg:h-96 object-cover object-center group-hover:scale-103 transition-transform duration-500"
                 loading="lazy"
@@ -287,16 +225,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             </h2>
           </div>
 
-          {onNavigateToGallery && (
-            <button
-              type="button"
-              onClick={onNavigateToGallery}
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-[#163E26] hover:text-[#C9A45C] transition-colors self-start sm:self-auto cursor-pointer group"
-            >
-              <span>View More Photos</span>
-              <span className="group-hover:translate-x-1 transition-transform">→</span>
-            </button>
-          )}
+          
         </div>
 
         {/* 5 Real Verified Greenwood Photos (Grid on Desktop, Swipe on Mobile) */}

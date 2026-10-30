@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
   projectId: "greenwood-cafe-narela",
@@ -28,6 +29,14 @@ try {
   console.warn('[Firebase] Auth client init notice:', err);
 }
 
+let storageInstance: any = null;
+try {
+  storageInstance = getStorage(app);
+} catch (err) {
+  console.warn('[Firebase] Storage client init notice:', err);
+}
+
 export const firestore = firestoreInstance;
 export const auth = authInstance;
+export const storage = storageInstance;
 export const googleProvider = new GoogleAuthProvider();

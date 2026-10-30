@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { VegBadge } from './Icons';
 import { api } from '../services/api';
-import { isAdminLoggedIn } from '../services/auth';
+import { isAdminLoggedIn, getCustomerAuth, type CustomerAuth, PRIMARY_ADMIN_PHONE } from '../services/auth';
 
 interface Address {
   id: string;
@@ -22,33 +22,53 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   onNavigateToMenu,
   onNavigateToCart: _onNavigateToCart,
 }) => {
-  // Customer Profile State
-  const [profile, setProfile] = useState({
-    name: 'Rahul Sharma',
-    phone: '+91 98765 43210',
-    email: 'rahul.sharma@example.com',
-    membership: 'Pure Veg Dining Club Member',
+  const [_userAuth, setUserAuth] = useState<CustomerAuth | null>(() => getCustomerAuth());
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => isAdminLoggedIn());
+
+  // Customer Profile State initialized dynamically
+  const [profile, setProfile] = useState(() => {
+    const auth = getCustomerAuth();
+    if (auth && auth.verified) {
+      return {
+        name: auth.name,
+        phone: `+91 ${auth.phone}`,
+        email: auth.email || (auth.phone === PRIMARY_ADMIN_PHONE ? 'greenwoodcafe.narela@gmail.com' : ''),
+      };
+    }
+    return {
+      name: 'Guest Diner',
+      phone: 'Sign in to Manage Account',
+      email: '',
+    };
   });
 
-  // Saved Addresses State
-  const [addresses, setAddresses] = useState<Address[]>([
-    {
-      id: 'addr-1',
-      type: 'Home',
-      isDefault: true,
-      addressLine: '123, Green Park, Sector 15, Noida, Uttar Pradesh - 201301',
-      phone: '+91 98765 43210',
-    },
-    {
-      id: 'addr-2',
-      type: 'Office',
-      isDefault: false,
-      addressLine: 'Tower B, Cyber City, Phase 2, Gurugram, Haryana - 122002',
-      phone: '+91 98765 43210',
-    },
-  ]);
+  // Saved Addresses State (Clean zero-demo start)
+  const [addresses, setAddresses] = useState<Address[]>([]);
 
-  // Sync profile and addresses with persistent SQLite backend
+  // Listen to auth state changes across windows & components
+  useEffect(() => {
+    const handleAuthChange = () => {
+      const freshAuth = getCustomerAuth();
+      setUserAuth(freshAuth);
+      setIsAdmin(isAdminLoggedIn());
+      if (freshAuth && freshAuth.verified) {
+        setProfile((prev) => ({
+          ...prev,
+          name: freshAuth.name,
+          phone: `+91 ${freshAuth.phone}`,
+          email: freshAuth.email || prev.email,
+        }));
+      }
+    };
+    window.addEventListener('gw_auth_changed', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+    return () => {
+      window.removeEventListener('gw_auth_changed', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+    };
+  }, []);
+
+  // Sync profile and addresses with persistent backend
   useEffect(() => {
     let isMounted = true;
     const fetchUserData = async () => {
@@ -58,13 +78,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           api.getAddresses(),
         ]);
         if (!isMounted) return;
-        if (fetchedProfile) {
+        if (fetchedProfile && fetchedProfile.name && fetchedProfile.name !== 'Guest User') {
           setProfile(fetchedProfile);
           setEditName(fetchedProfile.name);
           setEditPhone(fetchedProfile.phone);
           setEditEmail(fetchedProfile.email);
         }
-        if (fetchedAddresses && fetchedAddresses.length > 0) {
+        if (fetchedAddresses && Array.isArray(fetchedAddresses)) {
           setAddresses(fetchedAddresses as Address[]);
         }
       } catch {
@@ -275,16 +295,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                     <span className="truncate max-w-[200px] sm:max-w-none">{profile.email}</span>
                   </div>
                 </div>
-
-                {/* Loyalty Pill */}
-                <div className="pt-1">
-                  <span className="inline-flex items-center gap-1.5 bg-[#DCE8CB] text-[#163E26] text-[11px] font-semibold px-3 py-0.5 rounded-full shadow-2xs">
-                    <svg className="w-3.5 h-3.5 text-[#163E26]" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2.52-11 4 4.5-.5 7.5.5 11 2-4.5 1.5-8 2-11 2" />
-                    </svg>
-                    {profile.membership}
-                  </span>
-                </div>
               </div>
             </div>
 
@@ -338,7 +348,28 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
           {/* Address Cards 2-Column Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {addresses.map((addr) => (
+            {addresses.length === 0 ? (
+              <div className="col-span-full bg-[#FFFDF8] rounded-xl border border-dashed border-[#E8DDCA] p-6 text-center">
+                <div className="w-10 h-10 rounded-full bg-[#FAF6EE] border border-[#E8DDCA] flex items-center justify-center text-[#8F5D2C] mx-auto mb-2 text-base">
+                  📍
+                </div>
+                <h4 className="font-serif font-bold text-sm text-[#17261D] mb-1">No Saved Addresses Yet</h4>
+                <p className="text-xs text-[#77766D] mb-3">Add your home or office address for seamless delivery at Greenwood.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewAddrLine('');
+                    setNewAddrType('Home');
+                    setNewAddrIsDefault(true);
+                    setActiveModal({ type: 'add-address', title: 'Add New Delivery Address' });
+                  }}
+                  className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-colors cursor-pointer"
+                >
+                  + Add First Address
+                </button>
+              </div>
+            ) : (
+              addresses.map((addr) => (
               <div
                 key={addr.id}
                 className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-3.5 shadow-2xs hover:border-[#C9A45C]/60 transition-all flex flex-col justify-between"
@@ -422,7 +453,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
 
@@ -461,8 +492,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   <h4 className="font-serif font-bold text-xs sm:text-sm text-[#17261D] truncate">
                     My Orders
                   </h4>
-                  <span className="text-[10px] text-[#C83A25] font-semibold block">
-                    1 Active Order
+                  <span className="text-[10px] text-[#77766D] font-medium block">
+                    Tracking &amp; History
                   </span>
                 </div>
               </div>
@@ -558,7 +589,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             </button>
 
             {/* Action 6: Staff Admin Portal: Strictly visible to logged-in admins only */}
-            {isAdminLoggedIn() && (
+            {isAdmin && (
               <button
                 type="button"
                 onClick={() => {
@@ -814,33 +845,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               </div>
             )}
 
-            {/* Modal Content: Google Sync */}
-            {activeModal.type === 'google-sync' && (
-              <div className="my-3 space-y-3">
-                <p className="text-xs sm:text-sm text-[#4B5149] leading-relaxed">
-                  Linking your Google Account allows you to quickly log in across multiple devices without passwords while keeping your pure vegetarian favorites and delivery locations backed up.
-                </p>
-                <div className="pt-3 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveModal(null)}
-                    className="px-4 py-2 text-xs font-medium text-[#77766D] rounded-lg"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveModal(null);
-                      showToast('Google Account linked successfully!');
-                    }}
-                    className="bg-[#163E26] text-white px-4 py-2 text-xs font-semibold rounded-lg shadow-xs"
-                  >
-                    Authorize Google
-                  </button>
-                </div>
-              </div>
-            )}
+
 
             {/* Modal Content: Favorites */}
             {activeModal.type === 'favorites' && (

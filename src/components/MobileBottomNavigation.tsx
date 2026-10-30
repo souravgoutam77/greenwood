@@ -19,7 +19,7 @@ export const MobileBottomNavigation: React.FC<MobileBottomNavigationProps> = ({
 }) => {
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#FFFDF8]/95 backdrop-blur-md border-t border-[#E8DDCA] px-3 py-1.5 shadow-2xl flex items-center justify-around"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#FFFDF8] border-t border-[#E8DDCA] px-3 py-1.5 shadow-md flex items-center justify-around"
       aria-label="Mobile Bottom Navigation"
     >
       {/* 1. Home */}
@@ -77,9 +77,11 @@ export const MobileBottomNavigation: React.FC<MobileBottomNavigationProps> = ({
           <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
             <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="absolute -top-1.5 -right-2 bg-[#C83A25] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-1 ring-white">
-            {cartCount}
-          </span>
+          {cartCount > 0 && (
+            <span className="absolute -top-1.5 -right-2 bg-[#C83A25] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-1 ring-white">
+              {cartCount}
+            </span>
+          )}
         </div>
         <span className="text-[10px] font-medium tracking-tight">Cart</span>
       </button>

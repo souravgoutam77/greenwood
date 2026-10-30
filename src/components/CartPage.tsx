@@ -4,6 +4,8 @@ import { VegBadge, LeafBranch } from './Icons';
 import { api } from '../services/api';
 import { getCustomerAuth, type CustomerAuth } from '../services/auth';
 import { AuthModal } from './AuthModal';
+import { firestore } from '../services/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface CartPageProps {
   items: CartItem[];
@@ -43,13 +45,36 @@ export const CartPage: React.FC<CartPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     // 1. Fetch kitchen status & settings
     api.getSettings().then((s: any) => {
-      if (s) {
+      if (s && isMounted) {
         if (s.is_kitchen_open !== undefined) setIsKitchenOpen(s.is_kitchen_open);
         if (s.delivery_radius) setDeliveryRadiusKm(String(s.delivery_radius).replace(/\D/g, '') || '15');
       }
     }).catch(() => {});
+
+    // Listen to live settings changes
+    const handleSettingsUpdate = (e: any) => {
+      const s = e.detail;
+      if (s && isMounted && s.is_kitchen_open !== undefined) {
+        setIsKitchenOpen(s.is_kitchen_open);
+      }
+    };
+    window.addEventListener('gw_settings_updated', handleSettingsUpdate);
+    window.addEventListener('storage', handleSettingsUpdate);
+
+    let unsubscribeSettings: (() => void) | null = null;
+    if (firestore) {
+      try {
+        unsubscribeSettings = onSnapshot(doc(firestore, 'settings', 'config'), (snap) => {
+          if (snap.exists() && isMounted) {
+            const data = snap.data();
+            if (data.is_kitchen_open !== undefined) setIsKitchenOpen(data.is_kitchen_open);
+          }
+        });
+      } catch {}
+    }
 
     // 2. Fetch authenticated user session
     const currentAuth = getCustomerAuth();
@@ -69,7 +94,13 @@ export const CartPage: React.FC<CartPageProps> = ({
     };
 
     window.addEventListener('gw_auth_changed', handleAuthChange);
-    return () => window.removeEventListener('gw_auth_changed', handleAuthChange);
+    return () => {
+      isMounted = false;
+      if (unsubscribeSettings) unsubscribeSettings();
+      window.removeEventListener('gw_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('storage', handleSettingsUpdate);
+      window.removeEventListener('gw_auth_changed', handleAuthChange);
+    };
   }, []);
 
   // Bill Calculations
@@ -503,7 +534,7 @@ _Please confirm kitchen acceptance and live preparation status!_`;
                         required
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="e.g. Rahul Sharma"
+                        placeholder="e.g. Sourav"
                         className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
                       />
                     </div>

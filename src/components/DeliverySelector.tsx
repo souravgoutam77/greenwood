@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { api, computeEffectiveStoreStatus } from '../services/api';
+import { firestore } from '../services/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface DeliverySelectorProps {
   selectedHub: string;
@@ -17,7 +20,47 @@ export const DeliverySelector: React.FC<DeliverySelectorProps> = ({
   setSelectedHub,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isStoreOpen, setIsStoreOpen] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Live Operational Status
+  useEffect(() => {
+    let isMounted = true;
+    api.getSettings().then((s) => {
+      if (isMounted && s) {
+        setIsStoreOpen(computeEffectiveStoreStatus(s));
+      }
+    }).catch(() => {});
+
+    const handleSettingsUpdate = (e: any) => {
+      const s = e.detail;
+      if (s && isMounted) {
+        setIsStoreOpen(computeEffectiveStoreStatus(s));
+      }
+    };
+
+    window.addEventListener('gw_settings_updated', handleSettingsUpdate);
+    window.addEventListener('storage', handleSettingsUpdate);
+
+    let unsubscribeSettings: (() => void) | null = null;
+    if (firestore) {
+      try {
+        unsubscribeSettings = onSnapshot(doc(firestore, 'settings', 'config'), (snap) => {
+          if (snap.exists() && isMounted) {
+            const data = snap.data();
+            setIsStoreOpen(computeEffectiveStoreStatus(data));
+          }
+        });
+      } catch {}
+    }
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeSettings) unsubscribeSettings();
+      window.removeEventListener('gw_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('storage', handleSettingsUpdate);
+    };
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -34,7 +77,7 @@ export const DeliverySelector: React.FC<DeliverySelectorProps> = ({
 
   return (
     <div className="relative w-full bg-[#FAF6EE] border-b border-[#E8DDCA] py-2 px-3.5 sm:px-6 lg:px-8 z-40 transition-all">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs sm:text-sm">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5 text-xs sm:text-sm">
         
         {/* Deliver to Location Selector with Dropdown */}
         <div className="relative flex items-center justify-between sm:justify-start w-full sm:w-auto gap-2 sm:gap-3" ref={dropdownRef}>
@@ -118,14 +161,24 @@ export const DeliverySelector: React.FC<DeliverySelectorProps> = ({
           )}
         </div>
 
-        {/* Right Side Info (Desktop only): Pure Veg Fine Dining Assurance */}
-        <div className="hidden md:flex items-center gap-2 text-xs text-[#646B62]">
-          <span className="inline-flex items-center gap-1.5 text-[#163E26] font-semibold">
-            <span className="w-2 h-2 rounded-full bg-[#20BD5A] animate-pulse" />
-            Kitchen Open for Delivery &amp; Takeaway
-          </span>
-          <span className="text-[#E8DDCA]">|</span>
-          <span>⚡ Est. 25 Mins Insulated Delivery</span>
+        {/* Dynamic Store Status: Hidden when open, prominent warning banner when CLOSED */}
+        <div className="flex items-center gap-2 text-xs">
+          {!isStoreOpen ? (
+            <div
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-red-300 bg-red-50 text-red-700 shadow-2xs font-semibold text-xs"
+              title="Store is currently closed. Operating hours: 11:00 AM – 11:00 PM"
+            >
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="font-bold text-[11px] whitespace-nowrap">
+                Store Closed (Opens 11:00 AM)
+              </span>
+            </div>
+          ) : (
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-[#4B5149] text-xs">
+              <span className="text-amber-600">⚡</span>
+              <span>Est. 25 Mins Insulated Delivery</span>
+            </span>
+          )}
         </div>
 
       </div>

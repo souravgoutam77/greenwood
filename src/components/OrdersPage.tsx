@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { VegBadge } from './Icons';
 import { api } from '../services/api';
+import { firestore } from '../services/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 interface OrderItem {
   id: string;
@@ -34,190 +36,182 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
   onNavigateToCart,
   onReorder,
 }) => {
-  // Live Active Order Fallback / Default
-  const defaultLiveOrder = {
-    id: '#GW-8492',
-    placedAt: '12 Jan 2024, 7:15 PM',
-    status: 'Preparing in Kitchen',
-    eta: 'Arriving in 25–30 mins',
-    etaSubtext: 'Your delicious food is on the way!',
-    items: [
-      {
-        id: 'live-1',
-        name: 'Shahi Paneer Butter Masala',
-        quantity: 1,
-        price: 299,
-        image: '/images/orders/item1_shahi_paneer.jpg',
-      },
-      {
-        id: 'live-2',
-        name: 'Garlic Naan',
-        quantity: 2,
-        price: 98,
-        image: '/images/orders/item2_garlic_naan.jpg',
-      },
-      {
-        id: 'live-3',
-        name: 'Mango Lassi',
-        quantity: 1,
-        price: 129,
-        image: '/images/orders/item3_mango_lassi.jpg',
-      },
-    ],
-    address: {
-      name: 'Rahul Sharma',
-      line1: '123, Green Park, Sector 15',
-      line2: 'Noida, Uttar Pradesh – 201301',
-      phone: '+91 98765 43210',
-    },
-    rider: {
-      name: 'Amit Kumar',
-      status: 'On the way to you',
-      rating: '4.8',
-      deliveries: '320+ deliveries',
-      image: '/images/orders/rider_amit.jpg',
-      phone: '+91 98111 22334',
-    },
-  };
-
   const [activeOrder, setActiveOrder] = useState<any>(null);
-  const liveOrder = activeOrder || defaultLiveOrder;
+  const [pastOrders, setPastOrders] = useState<PastOrder[]>([]);
 
-  // Past Orders History Data (100% Pure Vegetarian)
-  const defaultPastOrders: PastOrder[] = [
-    {
-      id: '#GW-7231',
-      date: '5 Jan 2024, 1:20 PM',
-      itemsCount: 4,
-      total: 542,
-      status: 'Delivered',
-      mainImage: '/images/orders/past1_thali.jpg',
-      subImages: [
-        '/images/orders/p1_sub1.jpg',
-        '/images/orders/p1_sub2.jpg',
-        '/images/orders/p1_sub3.jpg',
-      ],
-      dishesSummary: 'Paneer Tikka Masala, Garlic Naan, Jeera Rice',
-      moreCount: 1,
-      items: [
-        { id: 'p1-1', name: 'Paneer Tikka Masala', quantity: 1, price: 289, image: '/images/orders/p1_sub1.jpg' },
-        { id: 'p1-2', name: 'Garlic Naan', quantity: 2, price: 98, image: '/images/orders/p1_sub2.jpg' },
-        { id: 'p1-3', name: 'Jeera Rice', quantity: 1, price: 155, image: '/images/orders/p1_sub3.jpg' },
-      ],
-    },
-    {
-      id: '#GW-6885',
-      date: '28 Dec 2023, 7:05 PM',
-      itemsCount: 3,
-      total: 412,
-      status: 'Delivered',
-      mainImage: '/images/orders/past2_pizza.jpg',
-      subImages: [
-        '/images/orders/p2_sub1.jpg',
-        '/images/orders/p2_sub2.jpg',
-      ],
-      dishesSummary: 'Farmhouse Pizza, Mango Lassi',
-      moreCount: 1,
-      items: [
-        { id: 'p2-1', name: 'Farmhouse Pizza', quantity: 1, price: 299, image: '/images/orders/p2_sub1.jpg' },
-        { id: 'p2-2', name: 'Mango Lassi', quantity: 1, price: 113, image: '/images/orders/p2_sub2.jpg' },
-      ],
-    },
-    {
-      id: '#GW-6510',
-      date: '14 Dec 2023, 2:30 PM',
-      itemsCount: 5,
-      total: 620,
-      status: 'Cancelled',
-      mainImage: '/images/orders/past3_curries.jpg',
-      subImages: [
-        '/images/orders/p3_sub1.jpg',
-        '/images/orders/p3_sub2.jpg',
-        '/images/orders/p3_sub3.jpg',
-      ],
-      dishesSummary: 'Dal Makhani, Butter Naan, Kadhai Paneer',
-      moreCount: 2,
-      items: [
-        { id: 'p3-1', name: 'Dal Makhani', quantity: 1, price: 249, image: '/images/orders/p3_sub1.jpg' },
-        { id: 'p3-2', name: 'Butter Naan', quantity: 2, price: 90, image: '/images/orders/p3_sub2.jpg' },
-        { id: 'p3-3', name: 'Kadhai Paneer', quantity: 1, price: 281, image: '/images/orders/p3_sub3.jpg' },
-      ],
-    },
-  ];
-
-  const [pastOrders, setPastOrders] = useState<PastOrder[]>(defaultPastOrders);
-
-  // Real-time backend sync for latest live order & past orders
+  // Real-time Firestore onSnapshot & local events sync
   useEffect(() => {
-    const fetchOrders = () => {
-      api.getLatestOrder().then((latest) => {
-        if (latest) {
-          const isDelivery = latest.orderType === 'Home Delivery';
-          const isOutForDelivery = latest.status === 'Out for Delivery';
-          const hasRider = Boolean(latest.deliveryPartnerName && latest.deliveryPartnerPhone);
+    let isMounted = true;
 
-          setActiveOrder({
-            id: latest.id,
-            placedAt: latest.placedTime || 'Recently placed',
-            status: latest.status === 'New' ? 'Order Placed & Confirmed' : latest.status === 'Preparing' ? 'Preparing in Kitchen' : latest.status === 'Out for Delivery' ? 'Out for Delivery' : latest.status,
-            orderType: latest.orderType,
-            eta: latest.status === 'Out for Delivery' ? 'Arriving in 10–15 mins' : latest.status === 'Preparing' ? 'Ready in 15–20 mins' : 'Estimated 25–30 mins',
-            etaSubtext: latest.status === 'Out for Delivery' ? (isDelivery ? 'Rider is on the way to your address!' : 'Ready for pickup at counter!') : 'Freshly prepared by Greenwood chefs',
-            items: latest.items.map((i, idx) => ({
-              id: `live-item-${idx}`,
-              name: i.name,
-              quantity: i.quantity,
-              price: i.price,
-              image: i.image || '/images/dish-detail/rec-dal-makhani.jpg',
-            })),
-            address: {
-              name: latest.customerName,
-              line1: latest.customerAddressOrTable,
-              line2: 'Narela Delivery Zone',
-              phone: latest.customerPhone,
-            },
-            rider: (isOutForDelivery && hasRider)
+    const processOrdersList = (ordersList: any[]) => {
+      if (!isMounted) return;
+      // Sort descending by time
+      const sorted = [...ordersList].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      // Find active live order (New, Preparing, Out for Delivery)
+      let latest = sorted.find((o) => o.status === 'New' || o.status === 'Preparing' || o.status === 'Out for Delivery');
+
+      // If no active in-flight orders, check if the latest completed/delivered order exists
+      if (!latest && sorted.length > 0 && (sorted[0].status === 'Completed' || sorted[0].status === 'Delivered')) {
+        latest = sorted[0];
+      }
+
+      if (latest) {
+        const isDelivery = latest.orderType === 'Home Delivery' || latest.orderType === 'delivery';
+        const isOutForDelivery = latest.status === 'Out for Delivery';
+        const isDelivered = latest.status === 'Completed' || latest.status === 'Delivered';
+        const hasRider = Boolean(latest.deliveryPartnerName && latest.deliveryPartnerPhone);
+
+        setActiveOrder({
+          id: latest.id,
+          rawStatus: latest.status,
+          placedAt: latest.placedTime || 'Recently placed',
+          completedAt: latest.completedTime || 'Recently delivered',
+          status:
+            latest.status === 'New'
+              ? 'Order Placed & Confirmed'
+              : latest.status === 'Preparing'
+              ? 'Preparing in Kitchen'
+              : latest.status === 'Out for Delivery'
+              ? (isDelivery ? 'Out for Delivery' : 'Ready for Pickup')
+              : isDelivered
+              ? 'Delivered'
+              : latest.status,
+          orderType: latest.orderType,
+          eta:
+            isDelivered
+              ? 'Order Delivered Successfully!'
+              : latest.status === 'Out for Delivery'
+              ? (isDelivery ? 'Arriving in 10–15 mins' : 'Ready for Pickup at Counter!')
+              : latest.status === 'Preparing'
+              ? 'Ready in 15–20 mins'
+              : 'Estimated 25–30 mins',
+          etaSubtext:
+            isDelivered
+              ? (isDelivery ? 'Delivered fresh to your doorstep' : 'Handed over at takeaway counter')
+              : latest.status === 'Out for Delivery'
+              ? (isDelivery ? 'Rider is on the way to your address!' : 'Ready for pickup at counter!')
+              : 'Freshly prepared by Greenwood chefs',
+          items: (latest.items || []).map((i: any, idx: number) => ({
+            id: `live-item-${idx}`,
+            name: i.name,
+            quantity: i.quantity,
+            price: i.price,
+            image: i.image || '/images/dish-detail/rec-dal-makhani.jpg',
+          })),
+          address: {
+            name: latest.customerName || 'Customer',
+            line1: latest.customerAddressOrTable || 'Narela, Delhi',
+            line2: 'Narela Delivery Zone',
+            phone: latest.customerPhone || '',
+          },
+          rider:
+            (isOutForDelivery || isDelivered) && hasRider
               ? {
                   name: latest.deliveryPartnerName,
-                  status: 'On the way to your address',
+                  status: isDelivered ? 'Order Delivered ✓' : 'On the way to your address',
                   rating: '4.8',
                   deliveries: 'Greenwood Delivery Partner',
                   image: '/images/orders/rider_amit.jpg',
                   phone: latest.deliveryPartnerPhone,
                 }
               : null,
-          });
-        }
-      }).catch(() => {});
+        });
+      } else {
+        setActiveOrder(null);
+      }
 
-      api.getOrders('Completed').then((completed) => {
-        if (completed && completed.length > 0) {
-          const mapped: PastOrder[] = completed.map((o) => ({
-            id: o.id,
-            date: o.completedTime || o.placedTime || 'Recently',
-            itemsCount: o.items.reduce((s, i) => s + i.quantity, 0),
-            total: o.total,
-            status: 'Delivered',
-            mainImage: o.items[0]?.image || '/images/orders/past1_thali.jpg',
-            subImages: o.items.slice(1, 4).map((i) => i.image || '/images/orders/p1_sub1.jpg'),
-            dishesSummary: o.items.map((i) => i.name).slice(0, 3).join(', '),
-            moreCount: Math.max(0, o.items.length - 3),
-            items: o.items.map((i, idx) => ({
-              id: `past-it-${idx}`,
-              name: i.name,
-              quantity: i.quantity,
-              price: i.price,
-              image: i.image || '/images/dish-detail/rec-dal-makhani.jpg',
-            })),
-          }));
-          setPastOrders(mapped);
-        }
-      }).catch(() => {});
+      // Past orders
+      const completed = sorted.filter((o) => o.status === 'Completed' || o.status === 'Declined');
+      if (completed.length > 0) {
+        const mapped: PastOrder[] = completed.map((o) => ({
+          id: o.id,
+          date: o.completedTime || o.placedTime || 'Recently',
+          itemsCount: (o.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0),
+          total: o.total || 0,
+          status: o.status === 'Declined' ? 'Cancelled' : 'Delivered',
+          mainImage: o.items?.[0]?.image || '/images/orders/past1_thali.jpg',
+          subImages: (o.items || []).slice(1, 4).map((i: any) => i.image || '/images/orders/p1_sub1.jpg'),
+          dishesSummary: (o.items || []).map((i: any) => i.name).slice(0, 3).join(', '),
+          moreCount: Math.max(0, (o.items || []).length - 3),
+          items: (o.items || []).map((i: any, idx: number) => ({
+            id: `past-it-${idx}`,
+            name: i.name,
+            quantity: i.quantity,
+            price: i.price,
+            image: i.image || '/images/dish-detail/rec-dal-makhani.jpg',
+          })),
+        }));
+        setPastOrders(mapped);
+      } else {
+        setPastOrders([]);
+      }
     };
 
-    fetchOrders();
-    const timer = setInterval(fetchOrders, 4000);
-    return () => clearInterval(timer);
+    // 1. Live Firestore onSnapshot subscription
+    let unsubscribeFirestore: (() => void) | null = null;
+    if (firestore) {
+      try {
+        const ordersRef = collection(firestore, 'orders');
+        unsubscribeFirestore = onSnapshot(ordersRef, (snapshot) => {
+          if (!snapshot.empty) {
+            const liveOrders: any[] = [];
+            snapshot.forEach((doc) => {
+              liveOrders.push({ id: doc.id, ...doc.data() });
+            });
+            processOrdersList(liveOrders);
+          } else {
+            processOrdersList([]);
+          }
+        }, (err) => {
+          console.warn('[Orders] Firestore onSnapshot notice:', err);
+        });
+      } catch (err) {
+        console.warn('[Orders] Firestore listener init notice:', err);
+      }
+    }
+
+    // 2. Fetch initial orders from API
+    const loadApiOrders = () => {
+      api.getOrders().then((all) => {
+        if (all) processOrdersList(all);
+      }).catch(() => {});
+    };
+    loadApiOrders();
+
+    // 3. Instant local & cross-tab events listener + BroadcastChannel + polling fallback
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleOrdersChanged = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (isMounted) loadApiOrders();
+      }, 300);
+    };
+    window.addEventListener('gw_orders_changed', handleOrdersChanged);
+    window.addEventListener('storage', handleOrdersChanged);
+
+    let bc: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        bc = new BroadcastChannel('gw_sync_channel');
+        bc.onmessage = (msg) => {
+          if (msg.data?.event === 'gw_orders_changed') {
+            handleOrdersChanged();
+          }
+        };
+      } catch {}
+    }
+
+    const pollInterval = setInterval(loadApiOrders, 12000);
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeFirestore) unsubscribeFirestore();
+      if (bc) bc.close();
+      window.removeEventListener('gw_orders_changed', handleOrdersChanged);
+      window.removeEventListener('storage', handleOrdersChanged);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   // Modal & Toast States
@@ -324,18 +318,28 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
         </div>
 
         {/* ========================================================= */}
-        {/* SECTION 2: ACTIVE / LIVE ORDER CARD (Order #GW-8492)     */}
+        {/* SECTION 2: ACTIVE / LIVE ORDER CARD                       */}
         {/* ========================================================= */}
-        <div className="bg-[#FFFDF8] rounded-2xl border border-[#E8DDCA] shadow-sm p-4 sm:p-6 mb-8 relative">
+        {activeOrder ? (
+          (() => {
+            const liveOrder = activeOrder;
+            const rawStatus = liveOrder.rawStatus || 'New';
+            const isDelivered = rawStatus === 'Completed' || rawStatus === 'Delivered';
+            const isOutForDelivery = rawStatus === 'Out for Delivery';
+            const isPreparing = rawStatus === 'Preparing';
+            const currentStep = isDelivered ? 4 : isOutForDelivery ? 3 : isPreparing ? 2 : 1;
+
+            return (
+              <div className="bg-[#FFFDF8] rounded-2xl border border-[#E8DDCA] shadow-sm p-4 sm:p-6 mb-8 relative">
           
           {/* Top Row: Live Order Label + ID + Timestamp + Estimated Arrival Panel */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#E8DDCA]">
             <div>
               {/* Green Live Indicator */}
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#168039] animate-pulse"></span>
-                <span className="text-[11px] font-bold tracking-widest text-[#163E26] uppercase font-sans">
-                  LIVE ORDER
+                <span className={`w-2.5 h-2.5 rounded-full ${isDelivered ? 'bg-[#168039]' : 'bg-[#168039] animate-pulse'}`}></span>
+                <span className={`text-[11px] font-bold tracking-widest uppercase font-sans ${isDelivered ? 'text-[#168039]' : 'text-[#163E26]'}`}>
+                  {isDelivered ? 'ORDER DELIVERED ✓' : 'LIVE ORDER'}
                 </span>
               </div>
 
@@ -345,21 +349,43 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                   Order <span className="font-sans font-bold text-lg sm:text-xl text-[#17261D]">{liveOrder.id}</span>
                 </h2>
                 <span className="text-xs sm:text-[13px] text-[#77766D] font-sans">
-                  Placed on {liveOrder.placedAt}
+                  {liveOrder.placedAt}
                 </span>
               </div>
             </div>
 
-            {/* Estimated Arrival Box (Soft Botanical Green) */}
-            <div className="bg-[#EBF3E6] border border-[#CDE1BE] rounded-xl px-4 py-2.5 flex items-center gap-3 shrink-0 shadow-xs">
-              <div className="w-8 h-8 rounded-full bg-[#163E26]/10 flex items-center justify-center text-[#163E26] shrink-0">
-                <svg className="w-5 h-5 text-[#163E26]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                  <circle cx="12" cy="12" r="9" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
-                </svg>
+            {/* Estimated Arrival / Delivered Box */}
+            <div className={`border rounded-xl px-4 py-2.5 flex items-center gap-3 shrink-0 shadow-xs ${
+              isDelivered
+                ? 'bg-[#EBF3E6] border-[#168039]'
+                : isOutForDelivery
+                ? 'bg-[#FFF8E7] border-[#E6C675]'
+                : 'bg-[#EBF3E6] border-[#CDE1BE]'
+            }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
+                isDelivered
+                  ? 'bg-[#168039] text-white'
+                  : isOutForDelivery
+                  ? 'bg-[#C9A45C]/20 text-[#8F5D2C]'
+                  : 'bg-[#163E26]/10 text-[#163E26]'
+              }`}>
+                {isDelivered ? (
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : isOutForDelivery ? (
+                  '🛵'
+                ) : (
+                  <svg className="w-5 h-5 text-[#163E26]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+                  </svg>
+                )}
               </div>
               <div>
-                <div className="text-sm font-semibold text-[#163E26] leading-tight">
+                <div className={`text-sm font-bold leading-tight ${
+                  isDelivered ? 'text-[#168039]' : isOutForDelivery ? 'text-[#8F5D2C]' : 'text-[#163E26]'
+                }`}>
                   {liveOrder.eta}
                 </div>
                 <div className="text-[11px] text-[#2B5238] font-sans">
@@ -370,22 +396,22 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
           </div>
 
           {/* ========================================================= */}
-          {/* FOUR-STAGE ORDER TIMELINE (Confirmed ➔ Preparing ➔ Out ➔ Delivered) */}
+          {/* FOUR-STAGE DYNAMIC ORDER TIMELINE                         */}
           {/* ========================================================= */}
           <div className="py-6 px-1 sm:px-6">
             <div className="relative flex items-center justify-between max-w-3xl mx-auto">
               
               {/* Connecting Lines Behind Stepper (Visible on Desktop & Mobile) */}
               <div className="absolute top-4 sm:top-5 left-6 sm:left-8 right-6 sm:right-8 h-0.5 -z-0 flex items-center">
-                {/* Stage 1 to 2: Completed line */}
-                <div className="w-1/3 h-0.5 bg-[#163E26]"></div>
-                {/* Stage 2 to 3: Active to Upcoming Dotted line */}
-                <div className="w-1/3 h-0.5 border-t-2 border-dotted border-[#C9A45C]"></div>
-                {/* Stage 3 to 4: Upcoming Dotted line */}
-                <div className="w-1/3 h-0.5 border-t-2 border-dotted border-[#D4C3A3]"></div>
+                {/* Stage 1 to 2 */}
+                <div className={`w-1/3 h-0.5 transition-colors ${currentStep >= 2 ? 'bg-[#163E26]' : 'border-t-2 border-dotted border-[#D4C3A3]'}`}></div>
+                {/* Stage 2 to 3 */}
+                <div className={`w-1/3 h-0.5 transition-colors ${currentStep >= 3 ? 'bg-[#163E26]' : 'border-t-2 border-dotted border-[#D4C3A3]'}`}></div>
+                {/* Stage 3 to 4 */}
+                <div className={`w-1/3 h-0.5 transition-colors ${currentStep >= 4 ? 'bg-[#168039]' : 'border-t-2 border-dotted border-[#D4C3A3]'}`}></div>
               </div>
 
-              {/* Step 1: Order Confirmed (Completed) */}
+              {/* Step 1: Order Confirmed */}
               <div className="flex flex-col items-center text-center relative z-10 flex-1">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#163E26] text-white flex items-center justify-center shadow-md mb-2">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
@@ -396,58 +422,93 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                   Order Confirmed
                 </div>
                 <div className="text-[9px] sm:text-[11px] text-[#77766D] mt-0.5">
-                  7:15 PM
+                  Confirmed ✓
                 </div>
               </div>
 
-              {/* Step 2: Preparing in Kitchen (Current Active) */}
+              {/* Step 2: Preparing in Kitchen */}
               <div className="flex flex-col items-center text-center relative z-10 flex-1">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#163E26] text-white flex items-center justify-center shadow-md ring-4 ring-[#DCE8CB] mb-2 animate-pulse">
-                  {/* Chef Hat Toque Icon matching reference */}
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z" />
-                    <line x1="6" y1="17" x2="18" y2="17" />
-                  </svg>
-                </div>
-                <div className="text-[11px] sm:text-[13px] font-bold text-[#163E26] leading-tight">
+                {currentStep > 2 ? (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#163E26] text-white flex items-center justify-center shadow-md mb-2">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                ) : currentStep === 2 ? (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#163E26] text-white flex items-center justify-center shadow-md ring-4 ring-[#DCE8CB] mb-2 animate-pulse">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z" />
+                      <line x1="6" y1="17" x2="18" y2="17" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#F5EFE6] border border-[#E0D8CB] text-[#9A9488] flex items-center justify-center mb-2">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#9A9488]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z" />
+                    </svg>
+                  </div>
+                )}
+                <div className={`text-[11px] sm:text-[13px] leading-tight ${currentStep >= 2 ? 'font-bold text-[#163E26]' : 'text-[#77766D]'}`}>
                   Preparing in Kitchen
                 </div>
-                <div className="text-[9px] sm:text-[11px] text-[#163E26] font-medium mt-0.5">
-                  7:28 PM
+                <div className="text-[9px] sm:text-[11px] text-[#77766D] mt-0.5">
+                  {currentStep > 2 ? 'Cooked ✓' : currentStep === 2 ? 'Preparing...' : 'Waiting...'}
                 </div>
               </div>
 
-              {/* Step 3: Out for Delivery (Upcoming) */}
+              {/* Step 3: Out for Delivery */}
               <div className="flex flex-col items-center text-center relative z-10 flex-1">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#F5EFE6] border border-[#E0D8CB] text-[#9A9488] flex items-center justify-center mb-2">
-                  {/* Delivery Bike Icon */}
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#9A9488]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-                    <circle cx="5" cy="17" r="3" />
-                    <circle cx="19" cy="17" r="3" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 17h4l3-6h5l2 3h2M9 11h3" />
-                  </svg>
+                {currentStep > 3 ? (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#163E26] text-white flex items-center justify-center shadow-md mb-2">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                ) : currentStep === 3 ? (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#163E26] text-white flex items-center justify-center shadow-md ring-4 ring-[#DCE8CB] mb-2 animate-pulse">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <circle cx="5" cy="17" r="3" />
+                      <circle cx="19" cy="17" r="3" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 17h4l3-6h5l2 3h2M9 11h3" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#F5EFE6] border border-[#E0D8CB] text-[#9A9488] flex items-center justify-center mb-2">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#9A9488]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+                      <circle cx="5" cy="17" r="3" />
+                      <circle cx="19" cy="17" r="3" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 17h4l3-6h5l2 3h2M9 11h3" />
+                    </svg>
+                  </div>
+                )}
+                <div className={`text-[11px] sm:text-[13px] leading-tight ${currentStep >= 3 ? 'font-bold text-[#163E26]' : 'text-[#77766D]'}`}>
+                  {liveOrder.orderType === 'Takeaway' ? 'Ready for Pickup' : 'Out for Delivery'}
                 </div>
-                <div className="text-[11px] sm:text-[13px] text-[#77766D] leading-tight">
-                  Out for Delivery
-                </div>
-                <div className="text-[9px] sm:text-[11px] text-[#9A9488] mt-0.5">
-                  Waiting...
+                <div className="text-[9px] sm:text-[11px] text-[#77766D] mt-0.5">
+                  {currentStep > 3 ? 'Dispatched ✓' : currentStep === 3 ? 'On the way' : 'Waiting...'}
                 </div>
               </div>
 
-              {/* Step 4: Delivered (Upcoming) */}
+              {/* Step 4: Delivered */}
               <div className="flex flex-col items-center text-center relative z-10 flex-1">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#F5EFE6] border border-[#E0D8CB] text-[#9A9488] flex items-center justify-center mb-2">
-                  {/* Home Icon */}
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#9A9488]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                  </svg>
+                {currentStep === 4 ? (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#168039] text-white flex items-center justify-center shadow-md ring-4 ring-[#DCE8CB] mb-2">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#F5EFE6] border border-[#E0D8CB] text-[#9A9488] flex items-center justify-center mb-2">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#9A9488]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                  </div>
+                )}
+                <div className={`text-[11px] sm:text-[13px] leading-tight ${currentStep === 4 ? 'font-bold text-[#168039]' : 'text-[#77766D]'}`}>
+                  {liveOrder.orderType === 'Takeaway' ? 'Picked Up' : 'Delivered'}
                 </div>
-                <div className="text-[11px] sm:text-[13px] text-[#77766D] leading-tight">
-                  Delivered
-                </div>
-                <div className="text-[9px] sm:text-[11px] text-[#9A9488] mt-0.5">
-                  Waiting...
+                <div className="text-[9px] sm:text-[11px] text-[#77766D] mt-0.5">
+                  {currentStep === 4 ? 'Delivered ✓' : 'Waiting...'}
                 </div>
               </div>
             </div>
@@ -668,7 +729,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                       type: 'help',
                       title: 'Need Help with your Order?',
                       message:
-                        'For order modifications, delayed delivery assistance, or quality queries, our manager is available at +91 98765 43210 (11 AM to 11 PM).',
+                        'For order modifications, delayed delivery assistance, or quality queries, our manager is available at +91 90669 06607 (11 AM to 11 PM).',
                     })
                   }
                   className="text-xs sm:text-[13px] font-bold text-[#17261D] hover:text-[#C9A45C] text-left transition-colors"
@@ -703,6 +764,29 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
             </div>
           </div>
         </div>
+            );
+          })()
+        ) : (
+          <div className="bg-[#FFFDF8] rounded-2xl border border-dashed border-[#E8DDCA] p-8 text-center mb-8">
+            <div className="w-14 h-14 rounded-full bg-[#FAF6EE] border border-[#E8DDCA] flex items-center justify-center text-2xl mx-auto mb-3">
+              🍲
+            </div>
+            <h3 className="font-serif font-bold text-lg text-[#17261D] mb-1">No Active Orders</h3>
+            <p className="text-xs text-[#77766D] max-w-sm mx-auto mb-4 font-sans">
+              You do not have any ongoing food orders right now. Craving fresh North Indian gravies or wood-fired pizzas?
+            </p>
+            {onNavigateToMenu && (
+              <button
+                type="button"
+                onClick={onNavigateToMenu}
+                className="inline-flex items-center gap-2 bg-[#163E26] hover:bg-[#1E5233] text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              >
+                <span>Explore Greenwood Menu</span>
+                <span>→</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* ========================================================= */}
         {/* SECTION 3: PREVIOUS ORDERS HISTORY (Compact Elegant Cards) */}
@@ -724,7 +808,14 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
 
           {/* Past Orders List */}
           <div className="space-y-3.5">
-            {pastOrders.map((order) => (
+            {pastOrders.length === 0 ? (
+              <div className="bg-[#FFFDF8] rounded-xl border border-dashed border-[#E8DDCA] p-6 text-center">
+                <p className="text-xs text-[#77766D] font-sans">
+                  No past orders found in your account yet. When you complete an order, it will appear here for easy 1-click reordering!
+                </p>
+              </div>
+            ) : (
+              pastOrders.map((order) => (
               <div
                 key={order.id}
                 className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-3 sm:p-4 hover:border-[#C9A45C]/60 transition-all shadow-2xs hover:shadow-xs"
@@ -925,7 +1016,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
       </div>

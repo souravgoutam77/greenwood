@@ -1,3 +1,4 @@
+import { LogoLoader } from './components/LogoLoader';
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { DeliverySelector } from './components/DeliverySelector';
@@ -9,21 +10,25 @@ import { Footer } from './components/Footer';
 import { MobileBottomNavigation } from './components/MobileBottomNavigation';
 import { CartDrawer } from './components/CartDrawer';
 import type { CartItem } from './components/CartDrawer';
-import { ItemDetailPage } from './components/ItemDetailPage';
 import { MenuPage } from './components/MenuPage';
 import { CartPage } from './components/CartPage';
-import { OrdersPage } from './components/OrdersPage';
-import { ProfilePage } from './components/ProfilePage';
-import { AdminDashboard } from './components/AdminDashboard';
 import { ContactModal } from './components/ContactModal';
-import { LegalPolicyModal } from './components/LegalPolicyModal';
 import type { PolicyTab } from './components/LegalPolicyModal';
+
+// High-Performance Dynamic Code Splitting for Non-Critical & Admin Views
+const ItemDetailPage = React.lazy(() => import('./components/ItemDetailPage').then(m => ({ default: m.ItemDetailPage })));
+const OrdersPage = React.lazy(() => import('./components/OrdersPage').then(m => ({ default: m.OrdersPage })));
+const ProfilePage = React.lazy(() => import('./components/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const AboutPage = React.lazy(() => import('./components/AboutPage').then(m => ({ default: m.AboutPage })));
+const ContactPage = React.lazy(() => import('./components/ContactPage').then(m => ({ default: m.ContactPage })));
+const LegalPolicyModal = React.lazy(() => import('./components/LegalPolicyModal').then(m => ({ default: m.LegalPolicyModal })));
 import { RESTAURANT_DATA } from './data/restaurantData';
 import type { Dish } from './data/restaurantData';
 
 export const App: React.FC = () => {
   // View routing (Default to home or hash-based view)
-  const [currentView, setCurrentView] = useState<'item-detail' | 'home' | 'menu' | 'cart' | 'orders' | 'profile' | 'admin'>(() => {
+  const [currentView, setCurrentView] = useState<'item-detail' | 'home' | 'menu' | 'cart' | 'orders' | 'profile' | 'admin' | 'about' | 'contact'>(() => {
     if (typeof window !== 'undefined') {
       if (window.location.hash === '#menu') {
         return 'menu';
@@ -39,6 +44,19 @@ export const App: React.FC = () => {
       }
       if (window.location.hash === '#admin') {
         return 'admin';
+      }
+      if (window.location.hash === '#about') {
+        return 'about';
+      }
+      if (window.location.hash === '#gallery') {
+        setTimeout(() => {
+          const el = document.getElementById('gallery');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+        return 'home';
+      }
+      if (window.location.hash === '#contact') {
+        return 'contact';
       }
       if (
         window.location.hash === '#dish' ||
@@ -79,8 +97,16 @@ export const App: React.FC = () => {
         setCurrentView('profile');
       } else if (window.location.hash === '#admin') {
         setCurrentView('admin');
+      } else if (window.location.hash === '#about') {
+        setCurrentView('about');
+      } else if (window.location.hash === '#gallery') {
+        setCurrentView('home');
+        setTimeout(() => {
+          const el = document.getElementById('gallery');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
       } else if (window.location.hash === '#contact') {
-        setIsContactOpen(true);
+        setCurrentView('contact');
       } else if (window.location.hash === '#terms') {
         setPolicyModal({ isOpen: true, tab: 'terms' });
       } else if (window.location.hash === '#refund') {
@@ -161,19 +187,19 @@ export const App: React.FC = () => {
       window.location.hash = '#admin';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (href === '#gallery') {
-      if (currentView !== 'home') {
-        setCurrentView('home');
-        setTimeout(() => {
-          document.getElementById('gallery')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-      } else {
-        document.getElementById('gallery')?.scrollIntoView({ behavior: 'smooth' });
-      }
-    } else if (href === '#about') {
       setCurrentView('home');
+      setTimeout(() => {
+        const el = document.getElementById('gallery');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else if (href === '#about') {
+      setCurrentView('about');
+      window.location.hash = '#about';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (href === '#contact') {
-      setIsContactOpen(true);
+      setCurrentView('contact');
+      window.location.hash = '#contact';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (href === '#terms') {
       setPolicyModal({ isOpen: true, tab: 'terms' });
     } else if (href === '#refund') {
@@ -241,12 +267,17 @@ export const App: React.FC = () => {
                   ? '#menu'
                   : currentView === 'cart'
                   ? '#cart'
+                  : currentView === 'about'
+                  ? '#about'
+                  : currentView === 'contact'
+                  ? '#contact'
                   : undefined
               }
             />
           </div>
         )}
 
+        <React.Suspense fallback={<LogoLoader />}>
         {currentView === 'item-detail' ? (
           <ItemDetailPage
             onBackToHome={() => {
@@ -329,6 +360,19 @@ export const App: React.FC = () => {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           />
+        ) : currentView === 'about' ? (
+          <AboutPage
+            onNavigateToMenu={handleSeeAllDishes}
+            onNavigateToContact={() => {
+              setCurrentView('contact');
+              window.location.hash = '#contact';
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        ) : currentView === 'contact' ? (
+          <ContactPage
+            onNavigateToMenu={handleSeeAllDishes}
+          />
         ) : (
           <>
             {/* SECTION 2: DELIVERY & LOCATION STRIP */}
@@ -341,7 +385,7 @@ export const App: React.FC = () => {
             <HeroBanner />
 
             {/* SECTION 4: SIGNATURE & TRENDING */}
-            <div id="signature-section">
+            <div id="signature-section" className="content-auto">
               <SignatureDishes
                 onAddToCart={handleAddToCart}
                 onSeeAllClick={handleSeeAllDishes}
@@ -360,11 +404,12 @@ export const App: React.FC = () => {
             <SocialSection />
           </>
         )}
+        </React.Suspense>
 
       </main>
 
-      {/* SECTION 8: COMPLETE FOOTER (Only shown on home page as per strict user instruction) */}
-      {currentView === 'home' && (
+      {/* SECTION 8: COMPLETE FOOTER */}
+      {(currentView === 'home' || currentView === 'about' || currentView === 'contact') && (
         <Footer
           onNavClick={handleNavClick}
           onPolicyClick={(tab) => setPolicyModal({ isOpen: true, tab })}
@@ -425,11 +470,15 @@ export const App: React.FC = () => {
       />
 
       {/* LEGAL & POLICIES MODAL (Terms & Conditions, Refund Policy, Privacy Policy) */}
-      <LegalPolicyModal
-        isOpen={policyModal.isOpen}
-        onClose={() => setPolicyModal((prev) => ({ ...prev, isOpen: false }))}
-        initialTab={policyModal.tab}
-      />
+      {policyModal.isOpen && (
+        <React.Suspense fallback={null}>
+          <LegalPolicyModal
+            isOpen={policyModal.isOpen}
+            onClose={() => setPolicyModal((prev) => ({ ...prev, isOpen: false }))}
+            initialTab={policyModal.tab}
+          />
+        </React.Suspense>
+      )}
 
       {/* Info Modal for Mobile Orders/Profile tabs */}
       {infoModal && (
