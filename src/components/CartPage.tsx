@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { CartItem } from './CartDrawer';
 import { VegBadge, LeafBranch } from './Icons';
 import { api } from '../services/api';
-import { getCustomerAuth, type CustomerAuth } from '../services/auth';
+import { getCustomerAuth, clearCustomerAuth, type CustomerAuth } from '../services/auth';
 import { AuthModal } from './AuthModal';
 import { firestore } from '../services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -37,6 +37,26 @@ export const CartPage: React.FC<CartPageProps> = ({
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+
+  // Structured Indian Delivery Address Fields (Clear, Unconfusing)
+  const [addrHouse, setAddrHouse] = useState('');
+  const [addrArea, setAddrArea] = useState('');
+  const [addrLandmark, setAddrLandmark] = useState('');
+  const [addrCity, setAddrCity] = useState('Narela, Delhi');
+  const [addrPincode, setAddrPincode] = useState('110040');
+
+  // Keep full address formatted and synchronized
+  useEffect(() => {
+    if (addrHouse || addrArea) {
+      const parts = [
+        addrHouse.trim(),
+        addrArea.trim(),
+        addrLandmark.trim() ? `Near ${addrLandmark.trim()}` : null,
+        `${addrCity.trim()} - ${addrPincode.trim()}`,
+      ].filter(Boolean);
+      setCustomerAddress(parts.join(', '));
+    }
+  }, [addrHouse, addrArea, addrLandmark, addrCity, addrPincode]);
   const [paymentMode, setPaymentMode] = useState<'Cash on Delivery' | 'UPI Payment'>('Cash on Delivery');
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState<string>('');
@@ -263,8 +283,8 @@ _Please confirm kitchen acceptance and live preparation status!_`;
 
     // Guard 2: Delivery Address (for Delivery orders)
     if (orderType === 'delivery') {
-      if (!customerAddress || customerAddress.trim().length < 5) {
-        setValidationError('Please enter a complete delivery address within Narela hub radius.');
+      if ((!addrHouse.trim() || !addrArea.trim()) && (!customerAddress || customerAddress.trim().length < 5)) {
+        setValidationError('Please enter your House/Flat number and Area/Sector for delivery in Narela.');
         return;
       }
     }
@@ -512,10 +532,24 @@ _Please confirm kitchen acceptance and live preparation status!_`;
                     Customer &amp; Delivery Details
                   </span>
                   {auth?.verified ? (
-                    <span className="text-[10px] bg-[#DCE8CB] text-[#163E26] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
-                      <span>✓</span>
-                      <span>Verified Mobile (+91 {auth.phone})</span>
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-[#DCE8CB] text-[#163E26] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                        <span>✓</span>
+                        <span>Verified Mobile (+91 {auth.phone ? `${auth.phone.slice(0, 5)} XXXXX` : ''})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearCustomerAuth();
+                          setAuth(null);
+                          setCustomerPhone('');
+                        }}
+                        className="text-[10px] text-[#C83A25] font-semibold hover:underline cursor-pointer"
+                        title="Log Out / Switch Account"
+                      >
+                        (Log Out)
+                      </button>
+                    </div>
                   ) : (
                     <span className="text-[10px] text-[#77766D] font-medium">
                       OTP on place order
@@ -534,7 +568,7 @@ _Please confirm kitchen acceptance and live preparation status!_`;
                         required
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="e.g. Sourav"
+                        placeholder="Enter your full name"
                         className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
                       />
                     </div>
@@ -550,7 +584,7 @@ _Please confirm kitchen acceptance and live preparation status!_`;
                           maxLength={10}
                           value={customerPhone}
                           onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
-                          placeholder="9876543210"
+                          placeholder="98765 XXXXX"
                           className="w-full pl-11 pr-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] font-mono focus:outline-none focus:border-[#163E26]"
                         />
                       </div>
@@ -558,23 +592,77 @@ _Please confirm kitchen acceptance and live preparation status!_`;
                   </div>
 
                   {orderType === 'delivery' && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
+                    <div className="space-y-2.5 pt-1">
+                      <div className="flex items-center justify-between">
                         <label className="text-[11px] font-semibold text-[#4B5149]">
-                          Delivery Address in Narela Hub Area <span className="text-[#C83A25]">*</span>
+                          Delivery Address Details <span className="text-[#C83A25]">*</span>
                         </label>
                         <span className="text-[10px] text-[#163E26] font-medium">
                           Hub Delivery (within {deliveryRadiusKm} km)
                         </span>
                       </div>
-                      <textarea
-                        rows={2}
-                        required
-                        value={customerAddress}
-                        onChange={(e) => setCustomerAddress(e.target.value)}
-                        placeholder="House/Flat No, Building, Pocket, Sector A10, Narela..."
-                        className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26] resize-none"
-                      />
+
+                      {/* 1. House / Flat & Building */}
+                      <div>
+                        <input
+                          type="text"
+                          required
+                          value={addrHouse}
+                          onChange={(e) => setAddrHouse(e.target.value)}
+                          placeholder="House / Flat No., Floor, Building Name *"
+                          className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
+                        />
+                      </div>
+
+                      {/* 2. Street, Sector, Area */}
+                      <div>
+                        <input
+                          type="text"
+                          required
+                          value={addrArea}
+                          onChange={(e) => setAddrArea(e.target.value)}
+                          placeholder="Street, Area, Pocket or Sector (e.g. Sector A10, Pocket 6) *"
+                          className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
+                        />
+                      </div>
+
+                      {/* 3. Nearby Landmark (Lending mark) */}
+                      <div>
+                        <input
+                          type="text"
+                          value={addrLandmark}
+                          onChange={(e) => setAddrLandmark(e.target.value)}
+                          placeholder="Nearby Landmark (e.g. Near Shiv Mandir / Opp DDA Park)"
+                          className="w-full px-3 py-2 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
+                        />
+                      </div>
+
+                      {/* 4. City & Pincode (Compact 2-col) */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-[#77766D] font-semibold mb-0.5">City</label>
+                          <input
+                            type="text"
+                            required
+                            value={addrCity}
+                            onChange={(e) => setAddrCity(e.target.value)}
+                            placeholder="Narela, Delhi"
+                            className="w-full px-3 py-1.5 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs text-[#17261D] focus:outline-none focus:border-[#163E26]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#77766D] font-semibold mb-0.5">Pincode</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={6}
+                            value={addrPincode}
+                            onChange={(e) => setAddrPincode(e.target.value.replace(/\D/g, ''))}
+                            placeholder="110040"
+                            className="w-full px-3 py-1.5 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs text-[#17261D] font-mono focus:outline-none focus:border-[#163E26]"
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

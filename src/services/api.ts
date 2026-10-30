@@ -331,11 +331,6 @@ export const api = {
       settings = getStorageItem<ApiSettings>('settings', DEFAULT_SETTINGS);
     }
 
-    // Auto schedule: 11:00 AM – 11:00 PM if no manual override is active
-    if (!settings.manual_override) {
-      settings.is_kitchen_open = isWithinAutoStoreHours();
-    }
-
     setStorageItem('settings', settings, false);
     return settings;
   },
@@ -346,11 +341,24 @@ export const api = {
     setStorageItem('settings', updated, true);
 
     if (firestore) {
-      setDoc(doc(firestore, 'settings', 'config'), cleanFirestoreData(updated), { merge: true }).catch((err) => {
+      // Build safe config object that strictly adheres to Firestore rules whitelist
+      const safeConfig = {
+        is_kitchen_open: Boolean(updated.is_kitchen_open),
+        home_delivery_enabled: Boolean(updated.home_delivery_enabled),
+        takeaway_enabled: Boolean(updated.takeaway_enabled),
+        opening_hours: String(updated.opening_hours || '11:00 AM – 11:00 PM'),
+        avg_prep_time: String(updated.avg_prep_time || '18 mins'),
+        delivery_radius: String(updated.delivery_radius || '15 km'),
+        restaurant_phone: String(updated.restaurant_phone || '+91 90669 06607'),
+        kitchen_phone: String(updated.kitchen_phone || '+91 90669 06607'),
+        audio_alerts: updated.audio_alerts !== false,
+      };
+      setDoc(doc(firestore, 'settings', 'config'), safeConfig, { merge: true }).catch((err) => {
         console.warn('Firestore updateSettings notice:', err);
       });
     }
 
+    broadcastCustomEvent('gw_settings_updated', updated);
     return { success: true, settings: updated };
   },
 

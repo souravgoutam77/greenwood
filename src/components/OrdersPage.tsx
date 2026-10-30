@@ -729,7 +729,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                       type: 'help',
                       title: 'Need Help with your Order?',
                       message:
-                        'For order modifications, delayed delivery assistance, or quality queries, our manager is available at +91 90669 06607 (11 AM to 11 PM).',
+                        'For order modifications, delivery updates, or kitchen queries, our team is directly available on phone and WhatsApp at +91 90669 06607 (11:00 AM to 11:00 PM).',
                     })
                   }
                   className="text-xs sm:text-[13px] font-bold text-[#17261D] hover:text-[#C9A45C] text-left transition-colors"
@@ -737,30 +737,22 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                   Need Help?
                 </button>
                 <div className="text-[11px] text-[#77766D]">
-                  Get help with your order
+                  Call restaurant for modifications or support
                 </div>
               </div>
             </div>
 
-            {/* Cancel Order Button */}
+            {/* Restaurant Call & Support Option (Replaces direct cancel) */}
             <div>
-              <button
-                type="button"
-                onClick={() =>
-                  setActiveModal({
-                    type: 'cancel',
-                    title: `Cancel Order ${liveOrder.id}?`,
-                    message:
-                      'Our kitchen has already started preparing your fresh vegetarian dishes. Orders can only be cancelled within 2 minutes of placement. Would you like to call the café directly?',
-                  })
-                }
-                className="w-full sm:w-auto bg-[#FFFDF8] hover:bg-[#FFF5F3] text-[#C83A25] border border-[#C83A25] hover:border-[#A82B18] text-xs font-semibold px-4 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+              <a
+                href="tel:+919066906607"
+                className="w-full sm:w-auto bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
-                Cancel Order
-              </button>
+                <span>Call Restaurant Support</span>
+              </a>
             </div>
           </div>
         </div>
@@ -1082,12 +1074,12 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               >
                 Close
               </button>
-              {activeModal.type === 'cancel' && (
+              {(activeModal.type === 'help' || activeModal.type === 'cancel') && (
                 <a
                   href="tel:+919066906607"
-                  className="bg-[#C83A25] hover:bg-[#A82B18] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer"
+                  className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
                 >
-                  Call Restaurant (+91 90669 06607)
+                  <span>📞 Call Restaurant (+91 90669 06607)</span>
                 </a>
               )}
             </div>

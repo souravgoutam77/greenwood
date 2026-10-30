@@ -15,6 +15,7 @@ interface CartDrawerProps {
   onClearCart: () => void;
   orderType: 'delivery' | 'takeaway';
   setOrderType: (type: 'delivery' | 'takeaway') => void;
+  isKitchenOpen?: boolean;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -25,6 +26,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onClearCart,
   orderType,
   setOrderType,
+  isKitchenOpen = true,
 }) => {
   if (!isOpen) return null;
 
@@ -194,15 +196,31 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
             </div>
 
-            <a
-              href={whatsappCheckoutUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 bg-[#163E26] hover:bg-[#1E5635] text-white py-3 px-4 rounded-full text-sm font-semibold shadow-md transition-all duration-200 hover:scale-[1.01]"
-            >
-              <WhatsAppIcon className="w-5 h-5" />
-              <span>Proceed via WhatsApp (₹{total})</span>
-            </a>
+            {!isKitchenOpen ? (
+              <div className="space-y-2">
+                <div className="p-2.5 bg-[#FEF3C7] border border-[#FDE68A] rounded-xl text-center text-xs text-[#92400E] leading-relaxed">
+                  ⚠️ <strong>Kitchen Currently Closed</strong><br />
+                  Greenwood Café is not accepting orders right now (Hours: 11:00 AM – 11:00 PM).
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  className="w-full bg-gray-400 text-white py-3 px-4 rounded-full text-xs sm:text-sm font-semibold cursor-not-allowed opacity-80 text-center"
+                >
+                  Store Closed • Reopening at 11:00 AM
+                </button>
+              </div>
+            ) : (
+              <a
+                href={whatsappCheckoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 bg-[#163E26] hover:bg-[#1E5635] text-white py-3 px-4 rounded-full text-sm font-semibold shadow-md transition-all duration-200 hover:scale-[1.01]"
+              >
+                <WhatsAppIcon className="w-5 h-5" />
+                <span>Proceed via WhatsApp (₹{total})</span>
+              </a>
+            )}
           </div>
         )}
       </div>

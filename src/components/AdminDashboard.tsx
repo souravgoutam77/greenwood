@@ -121,7 +121,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
   const [newReelUrl, setNewReelUrl] = useState('');
   const [newReelTitle, setNewReelTitle] = useState('');
-  const [newReelThumbnail, setNewReelThumbnail] = useState('/images/instagram/reel-real-1.jpg');
+  const [newReelThumbnail, setNewReelThumbnail] = useState('');
 
   // History Filter & Search
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -722,6 +722,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     showToast('Social video reels updated successfully!');
   };
 
+  const handleThumbnailFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 3 * 1024 * 1024) {
+        showToast('Image file too large. Please select an image under 3MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setNewReelThumbnail(reader.result);
+          showToast('✓ Thumbnail uploaded successfully!');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddReel = () => {
     if (!newReelUrl.trim()) {
       showToast('Please enter an Instagram reel URL.');
@@ -729,7 +747,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     const newReel = {
       id: `soc-${Date.now()}`,
-      image: newReelThumbnail.trim() || '/images/instagram/reel-real-1.jpg',
+      image: newReelThumbnail.trim() || '', // If empty, will use live Instagram video embed
       reelUrl: newReelUrl.trim(),
       alt: newReelTitle.trim() || 'Greenwood Cafe Instagram Reel',
     };
@@ -737,7 +755,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     handleSaveReels(updated);
     setNewReelUrl('');
     setNewReelTitle('');
-    setNewReelThumbnail('/images/instagram/reel-real-1.jpg');
+    setNewReelThumbnail('');
   };
 
   const handleDeleteReel = (id: string) => {
@@ -1007,14 +1025,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ========================================================= */}
       {/* TOP HEADER BAR (Clean, Settled, Fast)                     */}
       {/* ========================================================= */}
-      <header className="bg-[#2B180F] text-[#FAF6EE] px-3.5 sm:px-6 py-2.5 flex items-center justify-between border-b border-[#3D2517] z-30 shadow-sm shrink-0">
+      {/* Clean, Non-Messy Top Navigation Bar */}
+      <header className="bg-[#2B180F] text-[#FAF6EE] px-3 sm:px-6 py-2.5 flex items-center justify-between border-b border-[#3D2517] z-30 shadow-sm shrink-0">
         
-        {/* Left: Brand Identity */}
-        <div className="flex items-center gap-3">
+        {/* Left: Hamburger + Brand */}
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-1.5 text-[#E8DDCA] hover:text-white"
+            className="lg:hidden p-1.5 text-[#E8DDCA] hover:text-white rounded-lg focus:outline-none"
             aria-label="Toggle Sidebar Menu"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1023,20 +1042,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-[#C9A45C]" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-5 h-5 text-[#C9A45C] shrink-0" viewBox="0 0 24 24" fill="currentColor">
               <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2.52-11 4 4.5-.5 7.5.5 11 2-4.5 1.5-8 2-11 2" />
             </svg>
-            <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5">
+            <div className="flex items-baseline gap-1.5">
               <span className="font-serif font-bold text-sm sm:text-base tracking-wider text-[#FAF6EE]">GREENWOOD</span>
               <span className="text-[10px] tracking-widest text-[#C9A45C] uppercase font-medium">
-                Admin POS
+                POS
               </span>
             </div>
           </div>
         </div>
 
-        {/* Simple & Small Store Status Icon Button (Auto 11 AM – 11 PM + Manual Toggle) */}
-        <div className="flex items-center gap-2 text-xs">
+        {/* Center/Desktop Status: Store Status + Alerts + Live Clock */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Store Status Toggle Button (Always visible & prominent) */}
           <button
             type="button"
             disabled={syncingStoreStatus}
@@ -1045,10 +1065,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               syncingStoreStatus
                 ? 'Updating store status...'
                 : isKitchenOpen
-                ? 'Store: OPEN (Auto 11 AM – 11 PM). Click to Close manually.'
-                : 'Store: CLOSED. Click to Open manually.'
+                ? 'Store: OPEN (Accepting orders). Click to Close.'
+                : 'Store: CLOSED (Orders paused). Click to Open.'
             }
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 ${
               syncingStoreStatus
                 ? 'opacity-70 cursor-wait bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]'
                 : isKitchenOpen
@@ -1056,88 +1076,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 : 'bg-[#C83A25] border-[#EF4444] text-white hover:bg-[#B0301E]'
             }`}
           >
-            {/* Simple Small Storefront Icon */}
-            <svg
-              className="w-3.5 h-3.5 shrink-0"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M2 3h20" />
-              <path d="M3 3v4a3 3 0 0 0 6 0V3" />
-              <path d="M9 3v4a3 3 0 0 0 6 0V3" />
-              <path d="M15 3v4a3 3 0 0 0 6 0V3" />
-              <path d="M4 11v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9" />
-              <path d="M9 21v-6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v6" />
-            </svg>
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
+              className={`w-2 h-2 rounded-full shrink-0 ${
                 isKitchenOpen ? 'bg-[#4ADE80] animate-pulse' : 'bg-white'
               }`}
             />
             <span className="text-[11px] font-bold">
-              {syncingStoreStatus ? 'Updating...' : isKitchenOpen ? 'Open' : 'Closed'}
+              {syncingStoreStatus ? '...' : isKitchenOpen ? 'Open' : 'Closed'}
             </span>
           </button>
 
+          {/* Audio Alerts Toggle (Desktop/Tablet only) */}
           <button
             type="button"
             onClick={() => {
               setAudioAlerts(!audioAlerts);
               showToast(`Chime alerts: ${!audioAlerts ? 'ON 🔔' : 'OFF 🔕'}`);
             }}
-            className="flex items-center gap-1.5 text-[#E8DDCA] hover:text-white"
+            className="hidden md:flex items-center gap-1.5 text-[#E8DDCA] hover:text-white px-2 py-1 rounded-lg border border-[#3D2517] bg-[#1F1008] text-[11px]"
+            title="Toggle Order Ring Chime"
           >
             <span>{audioAlerts ? '🔔' : '🔕'}</span>
-            <span className="text-[11px]">Alerts: <strong>{audioAlerts ? 'ON' : 'OFF'}</strong></span>
+            <span>Alerts: <strong>{audioAlerts ? 'ON' : 'OFF'}</strong></span>
           </button>
-
-          <div className="text-[#B3A694] text-[11px]">
-            12 Jan 2024, 7:35 PM
-          </div>
         </div>
 
-        {/* Right: Switch to Customer Site Button + Manager Avatar */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Quick Notification Counter */}
-          <div className="relative text-[#E8DDCA] p-1.5">
-            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-[#C83A25] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-              1
-            </span>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-1.5 bg-[#FAF6EE]/10 px-2 py-1 rounded-full border border-[#C9A45C]/30 text-xs text-[#FAF6EE]">
-            <div className="w-5 h-5 rounded-full bg-[#C9A45C] text-[#2B180F] font-bold text-[10px] flex items-center justify-center">
-              M
-            </div>
-            <span className="font-medium text-[11px]">Manager</span>
-          </div>
-
+        {/* Right: Quick Navigation & Session Lock */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Lock / Logout Session */}
           <button
             type="button"
             onClick={handleAdminLogout}
-            className="bg-[#2B180F] hover:bg-[#3D2517] text-[#C9A45C] border border-[#C9A45C]/40 text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-xs cursor-pointer"
+            className="bg-[#1F1008] hover:bg-[#3D2517] text-[#C9A45C] border border-[#C9A45C]/40 text-xs font-semibold p-1.5 sm:px-2.5 sm:py-1 rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer"
             title="Lock Admin Session"
           >
             <span>🔒</span>
-            <span className="hidden sm:inline">Lock</span>
+            <span className="hidden sm:inline text-[11px]">Lock</span>
           </button>
 
-          {/* Switch to Customer Site Button */}
+          {/* Switch to Customer Site */}
           <button
             type="button"
             onClick={handleSwitchToCustomerSite}
-            className="bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#2B180F] border border-[#C9A45C] text-[11px] sm:text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
-            title="Switch from Admin Panel to Customer Website"
+            className="bg-[#FFFDF8] hover:bg-[#FAF6EE] text-[#2B180F] border border-[#C9A45C] text-xs font-semibold px-2 sm:px-3 py-1 rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer active:scale-98"
+            title="Switch from Admin to Customer Website"
           >
-            <span>Customer Site</span>
+            <span className="text-[11px]">Site</span>
             <svg className="w-3.5 h-3.5 text-[#8F5D2C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
@@ -2595,16 +2579,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-semibold text-[#77766D] block mb-1">Thumbnail Image URL</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-semibold text-[#77766D]">Thumbnail Image (Optional)</label>
+                          <label className="text-[10px] text-[#163E26] hover:underline font-bold cursor-pointer">
+                            📁 Upload File
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleThumbnailFileUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
                         <input
                           type="text"
                           value={newReelThumbnail}
                           onChange={(e) => setNewReelThumbnail(e.target.value)}
-                          placeholder="/images/instagram/reel-real-1.jpg"
+                          placeholder="Paste image URL or click Upload above (Leave blank for auto)"
                           className="w-full bg-[#FFFDF8] px-2.5 py-1.5 rounded border border-[#E8DDCA] text-xs focus:outline-none"
                         />
                       </div>
                     </div>
+                    {newReelThumbnail ? (
+                      <div className="flex items-center gap-2 pt-1 text-[11px] text-[#163E26]">
+                        <img src={newReelThumbnail} alt="Preview" className="w-8 h-10 object-cover rounded border border-[#C9A45C]" />
+                        <span>✓ Custom thumbnail selected</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewReelThumbnail('')}
+                          className="text-[#C83A25] underline text-[10px] ml-1"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-[#77766D] italic">
+                        💡 Agar thumbnail upload nahi karenge to Instagram ki real video automatically embed show hogi.
+                      </p>
+                    )}
                     <div className="text-right pt-1">
                       <button
                         type="button"
@@ -2628,17 +2640,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           className="flex items-center justify-between p-2.5 bg-[#FAF6EE] rounded-lg border border-[#E8DDCA] gap-2"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="relative w-10 h-14 shrink-0 rounded overflow-hidden border border-[#E8DDCA] bg-black">
-                              <img
-                                src={reel.image}
-                                alt={reel.alt}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = '/images/instagram/reel-real-1.jpg';
-                                }}
-                              />
-                              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[7px] text-white text-center truncate">
-                                @greenwood
+                            <div className="relative w-10 h-14 shrink-0 rounded overflow-hidden border border-[#E8DDCA] bg-[#1a0e08] flex items-center justify-center">
+                              {reel.image ? (
+                                <img
+                                  src={reel.image}
+                                  alt={reel.alt}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <span className="text-base">🎬</span>
+                              )}
+                              <span className="absolute bottom-0 inset-x-0 bg-black/75 text-[7px] text-white text-center truncate">
+                                {reel.image ? '@greenwood' : 'Live Reel'}
                               </span>
                             </div>
                             <div className="min-w-0">

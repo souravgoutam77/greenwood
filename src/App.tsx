@@ -14,6 +14,7 @@ import { MenuPage } from './components/MenuPage';
 import { CartPage } from './components/CartPage';
 import { ContactModal } from './components/ContactModal';
 import type { PolicyTab } from './components/LegalPolicyModal';
+import { api } from './services/api';
 
 // High-Performance Dynamic Code Splitting for Non-Critical & Admin Views
 const ItemDetailPage = React.lazy(() => import('./components/ItemDetailPage').then(m => ({ default: m.ItemDetailPage })));
@@ -72,7 +73,20 @@ export const App: React.FC = () => {
   // Application State
   const [orderType, setOrderType] = useState<'delivery' | 'takeaway'>('delivery');
   const [selectedHub, setSelectedHub] = useState<string>(RESTAURANT_DATA.delivery.location);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('greenwood_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('greenwood_cart', JSON.stringify(cart));
+    } catch {}
+  }, [cart]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [policyModal, setPolicyModal] = useState<{ isOpen: boolean; tab: PolicyTab }>({
@@ -81,6 +95,32 @@ export const App: React.FC = () => {
   });
   const [mobileTab, setMobileTab] = useState<'home' | 'menu' | 'cart' | 'orders' | 'profile'>('menu');
   const [infoModal, setInfoModal] = useState<{ title: string; message: string } | null>(null);
+  const [isKitchenOpen, setIsKitchenOpen] = useState(true);
+
+  // Sync kitchen status & operational schedule in real time
+  useEffect(() => {
+    let isMounted = true;
+    api.getSettings().then((s) => {
+      if (s && isMounted && s.is_kitchen_open !== undefined) {
+        setIsKitchenOpen(s.is_kitchen_open);
+      }
+    }).catch(() => {});
+
+    const handleSettingsUpdate = (e: any) => {
+      const s = e.detail;
+      if (s && isMounted && s.is_kitchen_open !== undefined) {
+        setIsKitchenOpen(s.is_kitchen_open);
+      }
+    };
+    window.addEventListener('gw_settings_updated', handleSettingsUpdate);
+    window.addEventListener('storage', handleSettingsUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('gw_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('storage', handleSettingsUpdate);
+    };
+  }, []);
 
   // Sync hash routing
   useEffect(() => {
@@ -277,6 +317,14 @@ export const App: React.FC = () => {
           </div>
         )}
 
+        {/* Real-time Store Closed Announcement Banner */}
+        {!isKitchenOpen && currentView !== 'admin' && (
+          <div className="bg-[#B91C1C] text-white px-3 py-2 text-center text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-inner z-40">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
+            <span>⚠️ <strong>Kitchen Closed for Online Orders:</strong> Greenwood Café is currently closed (Hours: 11:00 AM – 11:00 PM). Browsing menu only.</span>
+          </div>
+        )}
+
         <React.Suspense fallback={<LogoLoader />}>
         {currentView === 'item-detail' ? (
           <ItemDetailPage
@@ -461,6 +509,7 @@ export const App: React.FC = () => {
         onClearCart={handleClearCart}
         orderType={orderType}
         setOrderType={setOrderType}
+        isKitchenOpen={isKitchenOpen}
       />
 
       {/* CONTACT MODAL (Opens anywhere when clicking 'Contact' in 3-line menu, header, or footer) */}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { VegBadge } from './Icons';
 import { api } from '../services/api';
-import { isAdminLoggedIn, getCustomerAuth, type CustomerAuth, PRIMARY_ADMIN_PHONE } from '../services/auth';
+import { isAdminLoggedIn, getCustomerAuth, clearCustomerAuth, type CustomerAuth } from '../services/auth';
+import { AuthModal } from './AuthModal';
 
 interface Address {
   id: string;
@@ -22,22 +23,25 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   onNavigateToMenu,
   onNavigateToCart: _onNavigateToCart,
 }) => {
-  const [_userAuth, setUserAuth] = useState<CustomerAuth | null>(() => getCustomerAuth());
+  const [userAuth, setUserAuth] = useState<CustomerAuth | null>(() => getCustomerAuth());
   const [isAdmin, setIsAdmin] = useState<boolean>(() => isAdminLoggedIn());
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Customer Profile State initialized dynamically
   const [profile, setProfile] = useState(() => {
     const auth = getCustomerAuth();
     if (auth && auth.verified) {
+      const cleanPhone = (auth.phone || '').replace(/\D/g, '');
+      const masked = cleanPhone.length >= 10 ? `+91 ${cleanPhone.slice(0, 5)} XXXXX` : `+91 ${auth.phone}`;
       return {
         name: auth.name,
-        phone: `+91 ${auth.phone}`,
-        email: auth.email || (auth.phone === PRIMARY_ADMIN_PHONE ? 'greenwoodcafe.narela@gmail.com' : ''),
+        phone: masked,
+        email: auth.email || '',
       };
     }
     return {
       name: 'Guest Diner',
-      phone: 'Sign in to Manage Account',
+      phone: 'Not signed in',
       email: '',
     };
   });
@@ -52,12 +56,20 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       setUserAuth(freshAuth);
       setIsAdmin(isAdminLoggedIn());
       if (freshAuth && freshAuth.verified) {
+        const cleanPhone = (freshAuth.phone || '').replace(/\D/g, '');
+        const masked = cleanPhone.length >= 10 ? `+91 ${cleanPhone.slice(0, 5)} XXXXX` : `+91 ${freshAuth.phone}`;
         setProfile((prev) => ({
           ...prev,
           name: freshAuth.name,
-          phone: `+91 ${freshAuth.phone}`,
+          phone: masked,
           email: freshAuth.email || prev.email,
         }));
+      } else {
+        setProfile({
+          name: 'Guest Diner',
+          phone: 'Not signed in',
+          email: '',
+        });
       }
     };
     window.addEventListener('gw_auth_changed', handleAuthChange);
@@ -67,6 +79,18 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       window.removeEventListener('storage', handleAuthChange);
     };
   }, []);
+
+  const handleLogout = () => {
+    clearCustomerAuth();
+    setUserAuth(null);
+    setIsAdmin(false);
+    setProfile({
+      name: 'Guest Diner',
+      phone: 'Not signed in',
+      email: '',
+    });
+    showToast('Logged out successfully. See you again at Greenwood!');
+  };
 
   // Sync profile and addresses with persistent backend
   useEffect(() => {
@@ -112,8 +136,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   const [editEmail, setEditEmail] = useState(profile.email);
 
   const [newAddrType, setNewAddrType] = useState<'Home' | 'Office' | 'Other'>('Home');
-  const [newAddrLine, setNewAddrLine] = useState('');
-  const [newAddrPhone, setNewAddrPhone] = useState(profile.phone);
+  const [addrHouse, setAddrHouse] = useState('');
+  const [addrArea, setAddrArea] = useState('');
+  const [addrLandmark, setAddrLandmark] = useState('');
+  const [addrCity, setAddrCity] = useState('Narela, Delhi');
+  const [addrPincode, setAddrPincode] = useState('110040');
+  const [newAddrPhone, setNewAddrPhone] = useState(userAuth?.phone || '');
   const [newAddrIsDefault, setNewAddrIsDefault] = useState(false);
 
   const showToast = (msg: string) => {
@@ -141,14 +169,23 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
   const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAddrLine.trim()) return;
+    if (!addrHouse.trim() || !addrArea.trim()) {
+      showToast('Please enter your house/flat number and area.');
+      return;
+    }
+
+    const fullLine = `${addrHouse.trim()}, ${addrArea.trim()}${
+      addrLandmark.trim() ? `, Near ${addrLandmark.trim()}` : ''
+    }, ${addrCity.trim()} - ${addrPincode.trim()}`;
+
+    const effectivePhone = newAddrPhone.trim() || userAuth?.phone || '';
 
     const newAddr: Address = {
       id: `addr-${Date.now()}`,
       type: newAddrType,
       isDefault: newAddrIsDefault || addresses.length === 0,
-      addressLine: newAddrLine.trim(),
-      phone: newAddrPhone.trim() || profile.phone,
+      addressLine: fullLine,
+      phone: effectivePhone,
     };
 
     setAddresses((prev) => {
@@ -158,7 +195,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       return [...prev, newAddr];
     });
 
-    setNewAddrLine('');
+    setAddrHouse('');
+    setAddrArea('');
+    setAddrLandmark('');
     setActiveModal(null);
     showToast(`${newAddrType} address added!`);
     try {
@@ -298,23 +337,50 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               </div>
             </div>
 
-            {/* Right: Edit Profile Button */}
-            <div className="pt-2 sm:pt-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditName(profile.name);
-                  setEditPhone(profile.phone);
-                  setEditEmail(profile.email);
-                  setActiveModal({ type: 'edit-profile', title: 'Edit Profile Information' });
-                }}
-                className="w-full sm:w-auto bg-[#163E26] hover:bg-[#1E5233] text-white text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors"
-              >
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                Edit Profile
-              </button>
+            {/* Right: Profile Actions (Edit Profile + Log Out / Sign In) */}
+            <div className="pt-2 sm:pt-0 flex items-center gap-2 flex-wrap">
+              {userAuth && userAuth.verified ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditName(profile.name);
+                      setEditPhone(profile.phone);
+                      setEditEmail(profile.email);
+                      setActiveModal({ type: 'edit-profile', title: 'Edit Profile Information' });
+                    }}
+                    className="flex-1 sm:flex-initial bg-[#163E26] hover:bg-[#1E5233] text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    Edit Profile
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex-1 sm:flex-initial bg-white hover:bg-[#FDF2F2] text-[#C83A25] border border-[#C83A25]/40 hover:border-[#C83A25] text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                    title="Log Out of your Greenwood account"
+                  >
+                    <svg className="w-4 h-4 text-[#C83A25]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Log Out
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAuthModal(true)}
+                  className="w-full sm:w-auto bg-[#163E26] hover:bg-[#1E5233] text-white text-xs sm:text-sm font-semibold px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                  </svg>
+                  Sign In / Log In
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -335,7 +401,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <button
               type="button"
               onClick={() => {
-                setNewAddrLine('');
+                setAddrHouse('');
+                setAddrArea('');
+                setAddrLandmark('');
+                setAddrCity('Narela, Delhi');
+                setAddrPincode('110040');
+                setNewAddrPhone(userAuth?.phone || '');
                 setNewAddrType('Home');
                 setNewAddrIsDefault(false);
                 setActiveModal({ type: 'add-address', title: 'Add New Delivery Address' });
@@ -358,7 +429,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setNewAddrLine('');
+                    setAddrHouse('');
+                    setAddrArea('');
+                    setAddrLandmark('');
+                    setAddrCity('Narela, Delhi');
+                    setAddrPincode('110040');
+                    setNewAddrPhone(userAuth?.phone || '');
                     setNewAddrType('Home');
                     setNewAddrIsDefault(true);
                     setActiveModal({ type: 'add-address', title: 'Add New Delivery Address' });
@@ -408,7 +484,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                         <svg className="w-3 h-3 text-[#8F5D2C]" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
                         </svg>
-                        <span>{addr.phone}</span>
+                        <span>
+                          {addr.phone
+                            ? addr.phone.replace(/\D/g, '').length >= 10
+                              ? `+91 ${addr.phone.replace(/\D/g, '').slice(0, 5)} XXXXX`
+                              : addr.phone
+                            : ''}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -418,11 +500,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        setNewAddrLine(addr.addressLine);
+                        setAddrHouse(addr.addressLine);
+                        setAddrArea('Narela Hub');
+                        setAddrLandmark('');
+                        setAddrCity('Narela, Delhi');
+                        setAddrPincode('110040');
+                        setNewAddrPhone(addr.phone || userAuth?.phone || '');
                         setNewAddrType(addr.type);
                         setNewAddrIsDefault(addr.isDefault);
                         setActiveModal({
-                          type: 'edit-address',
+                          type: 'add-address',
                           title: `Edit ${addr.type} Address`,
                           targetAddress: addr,
                         });
@@ -614,6 +701,55 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               </button>
             )}
 
+            {/* Action 7: Log Out (when signed in) / Sign In (when guest) */}
+            {userAuth && userAuth.verified ? (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="bg-[#FFFDF8] hover:bg-[#FDF2F2] border border-[#E8DDCA] hover:border-[#C83A25]/50 rounded-xl p-3 text-left transition-all shadow-2xs hover:shadow-xs flex items-center justify-between group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#FDF2F2] border border-[#C83A25]/30 flex items-center justify-center text-[#C83A25] shrink-0 group-hover:scale-105 transition-transform">
+                    <svg className="w-4 h-4 text-[#C83A25]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-serif font-bold text-xs sm:text-sm text-[#C83A25] truncate">
+                      Log Out
+                    </h4>
+                    <span className="text-[10px] text-[#77766D] font-medium block">
+                      End Session
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs text-[#C83A25] group-hover:translate-x-0.5 transition-transform shrink-0 pl-1">→</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="bg-[#FFFDF8] hover:bg-[#FAF6EE] border border-[#E8DDCA] hover:border-[#163E26]/50 rounded-xl p-3 text-left transition-all shadow-2xs hover:shadow-xs flex items-center justify-between group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#EBF3ED] border border-[#163E26]/30 flex items-center justify-center text-[#163E26] shrink-0 group-hover:scale-105 transition-transform">
+                    <svg className="w-4 h-4 text-[#163E26]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-serif font-bold text-xs sm:text-sm text-[#163E26] truncate">
+                      Sign In
+                    </h4>
+                    <span className="text-[10px] text-[#77766D] font-medium block">
+                      Manage Account
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs text-[#163E26] group-hover:translate-x-0.5 transition-transform shrink-0 pl-1">→</span>
+              </button>
+            )}
+
           </div>
         </div>
 
@@ -763,27 +899,97 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   </div>
                 </div>
 
+                {/* 1. House / Flat No. & Building */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#17261D] mb-1">Complete Address</label>
-                  <textarea
-                    value={newAddrLine}
-                    onChange={(e) => setNewAddrLine(e.target.value)}
-                    placeholder="House/Flat No., Building name, Sector/Area, City, Pincode"
-                    rows={3}
+                  <label className="block text-xs font-semibold text-[#17261D] mb-1">
+                    House / Flat No., Floor &amp; Building <span className="text-[#C83A25]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={addrHouse}
+                    onChange={(e) => setAddrHouse(e.target.value)}
+                    placeholder="e.g. Flat 302, Tower B / Plot No. 2"
                     required
-                    className="w-full bg-[#FAF6EE] text-sm text-[#17261D] p-3 rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none resize-none"
+                    className="w-full bg-[#FAF6EE] text-xs sm:text-sm text-[#17261D] px-3.5 py-2 rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none"
                   />
                 </div>
 
+                {/* 2. Street / Area / Sector */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#17261D] mb-1">Contact Phone</label>
+                  <label className="block text-xs font-semibold text-[#17261D] mb-1">
+                    Street, Area or Sector <span className="text-[#C83A25]">*</span>
+                  </label>
                   <input
-                    type="tel"
-                    value={newAddrPhone}
-                    onChange={(e) => setNewAddrPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    className="w-full bg-[#FAF6EE] text-sm text-[#17261D] px-3.5 py-2 rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none"
+                    type="text"
+                    value={addrArea}
+                    onChange={(e) => setAddrArea(e.target.value)}
+                    placeholder="e.g. Sector A10, Pocket 6 / Singhu Road"
+                    required
+                    className="w-full bg-[#FAF6EE] text-xs sm:text-sm text-[#17261D] px-3.5 py-2 rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none"
                   />
+                </div>
+
+                {/* 3. Nearby Landmark (Lending mark) */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#17261D] mb-1">
+                    Nearby Landmark <span className="text-[10px] text-[#77766D] font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={addrLandmark}
+                    onChange={(e) => setAddrLandmark(e.target.value)}
+                    placeholder="e.g. Near Shiv Mandir / Opp. DDA Park"
+                    className="w-full bg-[#FAF6EE] text-xs sm:text-sm text-[#17261D] px-3.5 py-2 rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none"
+                  />
+                </div>
+
+                {/* 4. City & Pincode (Compact 2-col) */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#17261D] mb-1">
+                      City <span className="text-[#C83A25]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={addrCity}
+                      onChange={(e) => setAddrCity(e.target.value)}
+                      placeholder="Narela, Delhi"
+                      required
+                      className="w-full bg-[#FAF6EE] text-xs sm:text-sm text-[#17261D] px-3 py-2 rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#17261D] mb-1">
+                      Pincode <span className="text-[#C83A25]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={addrPincode}
+                      onChange={(e) => setAddrPincode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="110040"
+                      required
+                      className="w-full bg-[#FAF6EE] text-xs sm:text-sm text-[#17261D] font-mono px-3 py-2 rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* 5. Contact Phone */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#17261D] mb-1">
+                    Contact Mobile for Delivery Partner <span className="text-[10px] text-[#77766D] font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#77766D]">+91</span>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={newAddrPhone}
+                      onChange={(e) => setNewAddrPhone(e.target.value.replace(/\D/g, ''))}
+                      placeholder="98765 XXXXX"
+                      className="w-full pl-11 pr-3 py-2 bg-[#FAF6EE] text-xs sm:text-sm text-[#17261D] font-mono rounded-xl border border-[#E8DDCA] focus:border-[#163E26] focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
@@ -929,6 +1135,23 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           </div>
         </div>
       )}
+      {/* Customer Login / Verification Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={(freshAuth) => {
+          setShowAuthModal(false);
+          setUserAuth(freshAuth);
+          const cleanPhone = (freshAuth.phone || '').replace(/\D/g, '');
+          const masked = cleanPhone.length >= 10 ? `+91 ${cleanPhone.slice(0, 5)} XXXXX` : `+91 ${freshAuth.phone}`;
+          setProfile({
+            name: freshAuth.name,
+            phone: masked,
+            email: freshAuth.email || '',
+          });
+          showToast(`Welcome, ${freshAuth.name}! Logged in successfully.`);
+        }}
+      />
     </div>
   );
 };

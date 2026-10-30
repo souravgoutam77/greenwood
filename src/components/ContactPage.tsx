@@ -241,7 +241,7 @@ ${specialRequest.trim() ? `• *Special Notes:* ${specialRequest.trim()}` : ''}
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Sourav"
+                      placeholder="Enter your full name"
                       className="w-full px-3.5 py-2.5 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl text-xs sm:text-sm text-[#17261D] focus:outline-none focus:border-[#163E26]"
                     />
                   </div>
@@ -260,7 +260,7 @@ ${specialRequest.trim() ? `• *Special Notes:* ${specialRequest.trim()}` : ''}
                         maxLength={10}
                         value={phone}
                         onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                        placeholder="9876543210"
+                        placeholder="98765 XXXXX"
                         className="w-full px-3.5 py-2.5 bg-[#FAF6EE] border border-[#E8DDCA] rounded-r-xl text-xs sm:text-sm text-[#17261D] font-mono focus:outline-none focus:border-[#163E26]"
                       />
                     </div>

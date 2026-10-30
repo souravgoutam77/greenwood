@@ -4,7 +4,8 @@ import type { Dish } from '../data/restaurantData';
 import { SEARCHABLE_MENU } from '../data/searchableMenu';
 import type { SearchableMenuItem } from '../data/searchableMenu';
 import { VegBadge, WhatsAppIcon } from './Icons';
-import { isAdminLoggedIn, getCustomerAuth, type CustomerAuth } from '../services/auth';
+import { isAdminLoggedIn, getCustomerAuth, clearCustomerAuth, type CustomerAuth } from '../services/auth';
+import { getDishImage } from '../data/menuPageData';
 
 interface HeaderProps {
   onNavClick: (href: string) => void;
@@ -101,9 +102,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="relative w-full bg-[#24140D] text-[#FAF6EE] shadow-md z-40 border-b border-[#C9A45C]/35">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-13 sm:h-14 md:h-14 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-15 md:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
-        {/* Left: Brand Identity with Shine Animation */}
+        {/* Left: Brand Identity with Shine Animation (20% Larger) */}
         <a
           href="#home"
           onClick={(e) => {
@@ -117,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
             <img
               src="/logo-official-trimmed.png"
               alt="Greenwood Café"
-              className="shine-logo-img h-7 sm:h-8 md:h-8.5 w-auto object-contain"
+              className="shine-logo-img h-[34px] sm:h-[39px] md:h-[42px] w-auto object-contain"
             />
             <div className="logo-mask-shine" aria-hidden="true" />
           </div>
@@ -170,39 +171,48 @@ export const Header: React.FC<HeaderProps> = ({
 
               {searchResults.length > 0 ? (
                 <div className="max-h-80 overflow-y-auto divide-y divide-[#2C190F]/60">
-                  {searchResults.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3 hover:bg-[#2B180F] transition-colors flex items-center justify-between gap-3 group"
-                    >
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <div className="mt-0.5 shrink-0 scale-90">
-                          <VegBadge />
+                  {searchResults.map((item) => {
+                    const dishImg = getDishImage(item.name, item.category);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 hover:bg-[#2B180F] transition-colors flex items-center justify-between gap-3 group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={dishImg}
+                            alt={item.name}
+                            className="w-11 h-11 rounded-lg object-cover shrink-0 border border-[#3D2517] bg-[#120703]"
+                            loading="lazy"
+                          />
+                          <div className="mt-0.5 shrink-0 scale-90">
+                            <VegBadge />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs sm:text-sm font-semibold text-[#FAF6EE] group-hover:text-[#E8D094] transition-colors truncate">
+                              {item.name}
+                            </h4>
+                            <span className="text-[10px] text-[#9E8E7C] block truncate">
+                              {item.category} • {item.subcategory || 'Specialty'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs sm:text-sm font-semibold text-[#FAF6EE] group-hover:text-[#E8D094] transition-colors truncate">
-                            {item.name}
-                          </h4>
-                          <span className="text-[10px] text-[#9E8E7C] block truncate">
-                            {item.category} • {item.subcategory || 'Specialty'}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span className="font-sans font-bold text-xs sm:text-sm text-[#E8D094]">
-                          ₹{item.price}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleAddItem(item)}
-                          className="bg-[#163E26] hover:bg-[#1E5233] text-white text-[11px] font-semibold px-2.5 py-1 rounded-full border border-[#235C38] transition-all hover:scale-105 active:scale-95"
-                        >
-                          + Add
-                        </button>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <span className="font-sans font-bold text-xs sm:text-sm text-[#E8D094]">
+                            ₹{item.price}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAddItem(item)}
+                            className="bg-[#163E26] hover:bg-[#1E5233] text-white text-[11px] font-semibold px-2.5 py-1 rounded-full border border-[#235C38] transition-all hover:scale-105 active:scale-95"
+                          >
+                            + Add
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-4 text-center text-xs text-[#C5B39C]">
@@ -268,23 +278,38 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* User Profile / My Account Pill (Desktop) */}
-          <button
-            type="button"
-            onClick={() => handleLinkClick('#profile')}
-            className="hidden md:flex items-center gap-1.5 bg-[#FAF6EE]/10 hover:bg-[#FAF6EE]/20 px-2.5 py-1 rounded-full border border-[#C9A45C]/40 text-xs text-[#FAF6EE] transition-colors ml-1 cursor-pointer"
-            title="My Account & Profile"
-          >
-            <div className="w-5 h-5 rounded-full bg-[#C9A45C] text-[#2B180F] font-bold text-[10px] flex items-center justify-center uppercase">
-              {userAuth?.name?.charAt(0) || 'G'}
-            </div>
-            <span className="font-medium text-xs text-[#FAF6EE] max-w-[90px] truncate">
-              {userAuth?.name ? userAuth.name.split(' ')[0] : 'Profile'}
-            </span>
-            <svg className="w-3 h-3 text-[#C9A45C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+          {/* User Profile / My Account Pill & Quick Logout (Desktop) */}
+          <div className="hidden md:flex items-center gap-1.5 ml-1">
+            <button
+              type="button"
+              onClick={() => handleLinkClick('#profile')}
+              className="flex items-center gap-1.5 bg-[#FAF6EE]/10 hover:bg-[#FAF6EE]/20 px-2.5 py-1 rounded-full border border-[#C9A45C]/40 text-xs text-[#FAF6EE] transition-colors cursor-pointer"
+              title="My Account & Profile"
+            >
+              <div className="w-5 h-5 rounded-full bg-[#C9A45C] text-[#2B180F] font-bold text-[10px] flex items-center justify-center uppercase">
+                {userAuth?.name?.charAt(0) || 'G'}
+              </div>
+              <span className="font-medium text-xs text-[#FAF6EE] max-w-[90px] truncate">
+                {userAuth?.name ? userAuth.name.split(' ')[0] : 'Profile'}
+              </span>
+            </button>
+
+            {userAuth && userAuth.verified && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearCustomerAuth();
+                  setUserAuth(null);
+                  setAddedToast('Logged out successfully');
+                  setTimeout(() => setAddedToast(null), 2500);
+                }}
+                className="text-[11px] text-[#FF8A80] hover:text-white bg-[#2B180F]/80 hover:bg-[#C83A25] border border-[#FF8A80]/40 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                title="Log Out of your Greenwood account"
+              >
+                Log Out
+              </button>
+            )}
+          </div>
 
           {/* Hamburger Icon */}
           <button
@@ -346,35 +371,44 @@ export const Header: React.FC<HeaderProps> = ({
           {query.length > 0 && (
             <div className="mt-2 bg-[#1C1009] border border-[#C9A45C]/35 rounded-xl overflow-hidden shadow-2xl max-h-72 overflow-y-auto divide-y divide-[#2C190F]/70">
               {searchResults.length > 0 ? (
-                searchResults.map((item) => (
-                  <div key={item.id} className="p-2.5 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="scale-75 shrink-0">
-                        <VegBadge />
+                searchResults.map((item) => {
+                  const dishImg = getDishImage(item.name, item.category);
+                  return (
+                    <div key={item.id} className="p-2.5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={dishImg}
+                          alt={item.name}
+                          className="w-10 h-10 rounded-lg object-cover shrink-0 border border-[#3D2517] bg-[#120703]"
+                          loading="lazy"
+                        />
+                        <div className="scale-75 shrink-0 -ml-1">
+                          <VegBadge />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-[#FAF6EE] block truncate">
+                            {item.name}
+                          </span>
+                          <span className="text-[10px] text-[#9E8E7C] block truncate">
+                            {item.category}
+                          </span>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <span className="text-xs font-semibold text-[#FAF6EE] block truncate">
-                          {item.name}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-sans font-bold text-xs text-[#E8D094]">
+                          ₹{item.price}
                         </span>
-                        <span className="text-[10px] text-[#9E8E7C] block truncate">
-                          {item.category}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleAddItem(item)}
+                          className="bg-[#163E26] text-white text-[10px] font-semibold px-2.5 py-1 rounded-full border border-[#235C38]"
+                        >
+                          + Add
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-sans font-bold text-xs text-[#E8D094]">
-                        ₹{item.price}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleAddItem(item)}
-                        className="bg-[#163E26] text-white text-[10px] font-semibold px-2 py-1 rounded-full border border-[#235C38]"
-                      >
-                        + Add
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="p-3 text-center text-xs text-[#C5B39C]">
                   No dishes found.
@@ -385,11 +419,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      {/* Added Toast Notification */}
+      {/* Added / Action Toast Notification */}
       {addedToast && (
         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-[#163E26] text-[#FAF6EE] text-xs font-semibold px-4 py-2 rounded-full shadow-2xl border border-[#C9A45C] flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
           <span className="text-[#C9A45C]">✓</span>
-          <span>Added <strong>{addedToast}</strong> to cart!</span>
+          <span>{addedToast.includes('Logged') ? addedToast : <>Added <strong>{addedToast}</strong> to cart!</>}</span>
         </div>
       )}
 
@@ -423,6 +457,58 @@ export const Header: React.FC<HeaderProps> = ({
               {link.label}
             </a>
           ))}
+
+          {/* User Account & Log Out / Sign In option in Mobile Menu */}
+          {userAuth && userAuth.verified ? (
+            <div className="pt-2 border-t border-[#3D2517]/60 flex items-center justify-between px-3 py-2 bg-[#2B180F]/70 rounded-xl border border-[#C9A45C]/25">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-[#C9A45C] text-[#2B180F] font-bold text-xs flex items-center justify-center uppercase shrink-0">
+                  {userAuth.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm text-[#FAF6EE] font-semibold truncate">{userAuth.name}</div>
+                  <div className="text-[10px] text-[#C9A45C]">
+                    +91 {userAuth.phone ? `${userAuth.phone.slice(0, 5)} XXXXX` : ''}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  clearCustomerAuth();
+                  setUserAuth(null);
+                  setMobileMenuOpen(false);
+                  setAddedToast('Logged out successfully');
+                  setTimeout(() => setAddedToast(null), 2500);
+                }}
+                className="text-xs text-[#FF8A80] hover:text-white font-medium flex items-center gap-1 bg-[#1A0E08] hover:bg-[#C83A25] border border-[#FF8A80]/40 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                title="Log Out of your Greenwood account"
+              >
+                <span>Log Out</span>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <div className="pt-2 border-t border-[#3D2517]/60">
+              <a
+                href="#profile"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setMobileMenuOpen(false);
+                  handleLinkClick('#profile');
+                }}
+                className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-[#FAF6EE] bg-[#163E26]/80 hover:bg-[#163E26] border border-[#C9A45C]/30 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <span>👤</span>
+                  <span>Sign In to Account / Profile</span>
+                </span>
+                <span className="text-xs text-[#C9A45C]">→</span>
+              </a>
+            </div>
+          )}
 
           {/* WhatsApp Direct Option in 3-line menu */}
           <div className="pt-2 border-t border-[#3D2517]/60">

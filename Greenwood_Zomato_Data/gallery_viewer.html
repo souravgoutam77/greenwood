@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Greenwood Cafe - Real Zomato Catalog & Assets</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header { background: #1e293b; padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; border: 1px solid #334155; }
+    h1 { color: #22c55e; margin-bottom: 0.5rem; font-size: 2.2rem; }
+    .badge { display: inline-block; padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.85rem; font-weight: 600; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+    .badge-green { background: #14532d; color: #86efac; }
+    .badge-blue { background: #1e3a8a; color: #93c5fd; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .stat-card { background: #0f172a; padding: 1.2rem; border-radius: 0.75rem; border: 1px solid #334155; text-align: center; }
+    .stat-num { font-size: 2rem; font-weight: 700; color: #38bdf8; }
+    .stat-label { font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; margin-top: 0.25rem; }
+    h2 { font-size: 1.6rem; margin: 2rem 0 1rem 0; border-bottom: 2px solid #334155; padding-bottom: 0.5rem; color: #f1f5f9; }
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
+    .item-card { background: #1e293b; border-radius: 0.75rem; overflow: hidden; border: 1px solid #334155; display: flex; flex-direction: column; transition: transform 0.2s; }
+    .item-card:hover { transform: translateY(-4px); border-color: #22c55e; }
+    .item-img { width: 100%; height: 190px; object-fit: cover; background: #334155; }
+    .item-body { padding: 1rem; flex: 1; display: flex; flex-direction: column; }
+    .item-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.4rem; color: #ffffff; }
+    .item-cat { font-size: 0.8rem; color: #38bdf8; margin-bottom: 0.4rem; }
+    .item-price { font-size: 1.2rem; font-weight: 700; color: #22c55e; margin-bottom: 0.5rem; }
+    .item-desc { font-size: 0.85rem; color: #cbd5e1; flex: 1; }
+    .menu-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+    .menu-card-item { background: #1e293b; border-radius: 0.75rem; overflow: hidden; border: 1px solid #334155; }
+    .menu-card-img { width: 100%; height: 420px; object-fit: contain; background: #000; cursor: pointer; }
+    .menu-card-info { padding: 0.75rem 1rem; font-size: 0.9rem; color: #cbd5e1; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .tab-btn { background: #1e293b; border: 1px solid #334155; color: #f8fafc; padding: 0.6rem 1.2rem; border-radius: 0.5rem; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
+    .tab-btn.active { background: #22c55e; color: #000; border-color: #22c55e; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Greenwood Cafe (Real Zomato Data & Assets)</h1>
+      <p style="color: #cbd5e1; margin-bottom: 1rem;">📍 Shop 2, Ground Floor, Near Narela Sports Complex, Narela, New Delhi | 📞 +919066906607 | 🕒 11am – 11pm (Today)</p>
+      <div>
+        <span class="badge badge-green">Delivery Rating: 4.4 ★ (2,161 reviews)</span>
+        <span class="badge badge-blue">Dining Rating: 3.8 ★ (13 reviews)</span>
+        <span class="badge badge-green">Pure Veg</span>
+        <span class="badge badge-blue">Cost: ₹1,200 for two people (approx.)</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-num">166</div>
+          <div class="stat-label">Total Real Dishes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">49</div>
+          <div class="stat-label">Dishes with Real Photos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">8</div>
+          <div class="stat-label">Menu Scan Cards</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">15</div>
+          <div class="stat-label">Ambience & Diners Photos</div>
+        </div>
+      </div>
+    </header>
+
+    <h2>📜 Printed Menu Scan Cards (8 Pages)</h2>
+    <div class="menu-cards-grid">
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-1-food.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-1-food.jpg" alt="Menu Page 1" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 1</strong> - Food
+          </div>
+        </div>
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-2-food.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-2-food.jpg" alt="Menu Page 2" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 2</strong> - Food
+          </div>
+        </div>
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-3-food.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-3-food.jpg" alt="Menu Page 3" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 3</strong> - Food
+          </div>
+        </div>
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-4-food.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-4-food.jpg" alt="Menu Page 4" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 4</strong> - Food
+          </div>
+        </div>
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-5-food.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-5-food.jpg" alt="Menu Page 5" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 5</strong> - Food
+          </div>
+        </div>
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-6-food.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-6-food.jpg" alt="Menu Page 6" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 6</strong> - Food
+          </div>
+        </div>
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-7-food.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-7-food.jpg" alt="Menu Page 7" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 7</strong> - Food
+          </div>
+        </div>
+      
+        <div class="menu-card-item">
+          <a href="./images/menus/menu-card-page-8-beverages.jpg" target="_blank">
+            <img class="menu-card-img" src="./images/menus/menu-card-page-8-beverages.jpg" alt="Menu Page 8" />
+          </a>
+          <div class="menu-card-info">
+            <strong>Page 8</strong> - Beverages
+          </div>
+        </div>
+      
+    </div>
+
+    <h2>🍽️ Real Dishes with Photos (49 Dishes)</h2>
+    <div class="cards-grid">
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/chilli-potato.jpeg" alt="Chilli Potato" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chinese Starters</div>
+            <div class="item-title">Chilli Potato</div>
+            <div class="item-price">₹238</div>
+            <div class="item-desc">Crisp fried potatoes, tossed in slightly spicy & sour sauce.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/honey-chilli-potato.jpeg" alt="Honey Chilli Potato" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chinese Starters</div>
+            <div class="item-title">Honey Chilli Potato</div>
+            <div class="item-price">₹276</div>
+            <div class="item-desc">Crisp fried potatoes, tossed in slightly spicy, sweet & sour sauce.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/manchurian-dry.jpeg" alt="Manchurian Dry" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chinese Starters</div>
+            <div class="item-title">Manchurian Dry</div>
+            <div class="item-price">₹238</div>
+            <div class="item-desc">Veggie balls dunked into a sauce with hot, sweet, sour & salty flavours.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/manchurian-gravy.jpeg" alt="Manchurian Gravy" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chinese Starters</div>
+            <div class="item-title">Manchurian Gravy</div>
+            <div class="item-price">₹276</div>
+            <div class="item-desc">Veggie balls dunked into a sauce with hot, sweet, sour & salty flavours.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/spring-roll.jpeg" alt="Spring Roll" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chinese Starters</div>
+            <div class="item-title">Spring Roll</div>
+            <div class="item-price">₹228</div>
+            <div class="item-desc">Savory rolls with cabbage and other vegetable fillings.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/chilli-garlic-noodles.jpeg" alt="Chilli Garlic Noodles" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chowmein</div>
+            <div class="item-title">Chilli Garlic Noodles</div>
+            <div class="item-price">₹276</div>
+            <div class="item-desc">Asian chinese style. noodles prepared with red chilli sauce and lots of garlic.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/hakka-noodles.jpeg" alt="Hakka Noodles" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chowmein</div>
+            <div class="item-title">Hakka Noodles</div>
+            <div class="item-price">₹295</div>
+            <div class="item-desc">Toss fried hakka noodles with a distinct indo chinese flavour.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/singapuri-chowmein.jpeg" alt="Singapuri Chowmein" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chowmein</div>
+            <div class="item-title">Singapuri Chowmein</div>
+            <div class="item-price">₹276</div>
+            <div class="item-desc">Desi style chowmein packed with kick of heat and flavours.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/veg-chowmein.jpeg" alt="Veg Chowmein" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chowmein</div>
+            <div class="item-title">Veg Chowmein</div>
+            <div class="item-price">₹238</div>
+            <div class="item-desc">Stir fried noodles loaded with veggis and spices.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/paneer-momos.jpeg" alt="Paneer Momos" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Steamed Momos</div>
+            <div class="item-title">Paneer Momos</div>
+            <div class="item-price">₹210</div>
+            <div class="item-desc">6 pieces A mouth-watering dish made with tender and juicy paneer and aromatic momo wrappers, these delectable snacks are perfect for a light bite or a</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/veg-momos.jpeg" alt="Veg Momos" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Steamed Momos</div>
+            <div class="item-title">Veg Momos</div>
+            <div class="item-price">₹190</div>
+            <div class="item-desc">6 pieces A dumpling filled with a flavorful vegetable filling and steamed to perfection, these Veg momos are a tasty and satisfying snack.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/akha-paneer-momos.jpeg" alt="Akha Paneer Momos" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chef Special Momos</div>
+            <div class="item-title">Akha Paneer Momos</div>
+            <div class="item-price">₹333</div>
+            <div class="item-desc">6 Pieces</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/kurkure-momos.jpeg" alt="Kurkure Momos" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chef Special Momos</div>
+            <div class="item-title">Kurkure Momos</div>
+            <div class="item-price">₹333</div>
+            <div class="item-desc">6 pieces Juicy and flavourful, these momos are a perfect addition to your evening tea or dinner. The mildly spicy and flavoursome momos, made</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/tandoori-momos.jpeg" alt="Tandoori Momos" />
+          <div class="item-body">
+            <div class="item-cat">Chinese &rsaquo; Chef Special Momos</div>
+            <div class="item-title">Tandoori Momos</div>
+            <div class="item-price">₹333</div>
+            <div class="item-desc">6 pieces Tantalising steamed momos marinated with a punch of Indian spices and a crunchy vegetable and paneer stuffing, cooked in a Tandoor to perfect crisp, these tandoori momos are sure to make you drool!</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/veg-seekh-kebab.jpeg" alt="Veg Seekh Kebab" />
+          <div class="item-body">
+            <div class="item-cat">Tandoori &rsaquo; Tandoori Starters</div>
+            <div class="item-title">Veg Seekh Kebab</div>
+            <div class="item-price">₹276</div>
+            <div class="item-desc">Yummy Indian starter prepared with mix vegetable, potatoes and secret spice mix.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/smoky-paneer-tikka.jpeg" alt="Smoky Paneer Tikka" />
+          <div class="item-body">
+            <div class="item-cat">Tandoori &rsaquo; Tikkas</div>
+            <div class="item-title">Smoky Paneer Tikka</div>
+            <div class="item-price">₹333</div>
+            <div class="item-desc">A succulent and soft paneer tikka made with fresh herbs and spices, marinated and grilled to perfection.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/afghani-soya-chaap.jpeg" alt="Afghani Soya Chaap" />
+          <div class="item-body">
+            <div class="item-cat">Tandoori &rsaquo; Chaaps</div>
+            <div class="item-title">Afghani Soya Chaap</div>
+            <div class="item-price">₹333</div>
+            <div class="item-desc">Flavourful soyabean chaap marinated in variety of sauce.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/nawabi-malai-soya-chaap.jpeg" alt="Nawabi Malai Soya Chaap" />
+          <div class="item-body">
+            <div class="item-cat">Tandoori &rsaquo; Chaaps</div>
+            <div class="item-title">Nawabi Malai Soya Chaap</div>
+            <div class="item-price">₹333</div>
+            <div class="item-desc">Flavourful soyabean chaap marinated in variety of sauce.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/aloo-tikki-burger.jpeg" alt="Aloo Tikki Burger" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Burger</div>
+            <div class="item-title">Aloo Tikki Burger</div>
+            <div class="item-price">₹120</div>
+            <div class="item-desc">A delicious and crispy burger filled with mashed potatoes, seasoned with spices and served with a side of fries. A flavourful and satisfying snack.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/classic-salted-fries.jpeg" alt="Classic Salted Fries" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Fries</div>
+            <div class="item-title">Classic Salted Fries</div>
+            <div class="item-price">₹180</div>
+            <div class="item-desc">A classic French fry with a twist of salt and herbs. A perfect side for any meal.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/alfredo-pasta.jpeg" alt="Alfredo Pasta" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Pasta</div>
+            <div class="item-title">Alfredo Pasta</div>
+            <div class="item-price">₹319</div>
+            <div class="item-desc">Freshly prepared at Greenwood Cafe.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/pink-sauce-pasta.jpeg" alt="Pink Sauce Pasta" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Pasta</div>
+            <div class="item-title">Pink Sauce Pasta</div>
+            <div class="item-price">₹350</div>
+            <div class="item-desc">Yummy pink sauce pasta having tang of tomato sauce and creaminess of white sauce.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/spicy-red-sauce-pasta.jpeg" alt="Spicy Red Sauce Pasta" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Pasta</div>
+            <div class="item-title">Spicy Red Sauce Pasta</div>
+            <div class="item-price">₹300</div>
+            <div class="item-desc">Greenwood Special Red Sauce Paste! it is a perfect. combination of spicy and tangy tasting pasta! Sauce is prepared using cream, cheese sauce and other special ingredients!</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/white-sauce-pasta.jpeg" alt="White Sauce Pasta" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Pasta</div>
+            <div class="item-title">White Sauce Pasta</div>
+            <div class="item-price">₹300</div>
+            <div class="item-desc">A creamy and flavourful pasta dish with rich and cheesy Alfredo sauce. A hearty dish that is perfect for a hearty meal. NOTE: We do not use any maida in the sauce! Our cream cheese sauce is prepared using special type of cheese, cream, butter and special spice mix!</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/cheese-corn-salsa-wrap.jpeg" alt="Cheese Corn Salsa Wrap" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Wraps</div>
+            <div class="item-title">Cheese Corn Salsa Wrap</div>
+            <div class="item-price">₹209</div>
+            <div class="item-desc">Freshly prepared at Greenwood Cafe.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/greenwood-special-sandwich.jpeg" alt="Greenwood Special Sandwich" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Grilled Sandwiches</div>
+            <div class="item-title">Greenwood Special Sandwich</div>
+            <div class="item-price">₹319</div>
+            <div class="item-desc">Freshly prepared at Greenwood Cafe.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/veggie-lover-pizza.jpeg" alt="Veggie Lover Pizza" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Pizza</div>
+            <div class="item-title">Veggie Lover Pizza</div>
+            <div class="item-price">₹330</div>
+            <div class="item-desc">Onion, Green Capsicum, Mushroom and Tomato</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/veggie-supreme.jpeg" alt="Veggie Supreme" />
+          <div class="item-body">
+            <div class="item-cat">Continental &rsaquo; Pizza</div>
+            <div class="item-title">Veggie Supreme</div>
+            <div class="item-price">₹330</div>
+            <div class="item-desc">Black Olive, Green Capsicum, Mushroom, Onion, Red Paprika and Sweet Corn</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/changezi-chaap.jpeg" alt="Changezi Chaap" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Veg Curries</div>
+            <div class="item-title">Changezi Chaap</div>
+            <div class="item-price">₹319</div>
+            <div class="item-desc">Soya chaap cooked with lots of spices and other ingredients.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/dal-makhani.jpeg" alt="Dal Makhani" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Veg Curries</div>
+            <div class="item-title">Dal Makhani</div>
+            <div class="item-price">₹329</div>
+            <div class="item-desc">A rich and creamy dish made with lentils cooked in a tomato-based gravy. Flavored with aromatic spices and garnished with fresh cream. A perfect</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/matar-mushroom.jpeg" alt="Matar Mushroom" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Veg Curries</div>
+            <div class="item-title">Matar Mushroom</div>
+            <div class="item-price">₹329</div>
+            <div class="item-desc">A vegetarians delight of mushrooms with peas.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/mix-veg.jpeg" alt="Mix Veg" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Veg Curries</div>
+            <div class="item-title">Mix Veg</div>
+            <div class="item-price">₹319</div>
+            <div class="item-desc">Sauteed veggies cooked in rich onion tomato paste with ginger, garlic & north Indian spices.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/tawa-masala-chaap.jpeg" alt="Tawa Masala Chaap" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Veg Curries</div>
+            <div class="item-title">Tawa Masala Chaap</div>
+            <div class="item-price">₹319</div>
+            <div class="item-desc">A flavorsome indulgence made by cooking soya chaap in a tomato gravy seasoned with Indian spices.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/kadhai-paneer.jpeg" alt="Kadhai Paneer" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Paneer Curries</div>
+            <div class="item-title">Kadhai Paneer</div>
+            <div class="item-price">₹349</div>
+            <div class="item-desc">Paneer cubes cooked with onion, tomato gravy, tossed with onions & capsicum.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/paneer-butter-masala.jpeg" alt="Paneer Butter Masala" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Paneer Curries</div>
+            <div class="item-title">Paneer Butter Masala</div>
+            <div class="item-price">₹349</div>
+            <div class="item-desc">Cottage cheese cooked with bell pepper, onions, garlic, ginger, tomatoes cream & spices.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/paneer-lababdar.jpeg" alt="Paneer Lababdar" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Paneer Curries</div>
+            <div class="item-title">Paneer Lababdar</div>
+            <div class="item-price">₹349</div>
+            <div class="item-desc">A mild spicy preparation of paneer simmered in tomato gravy with chopped capsicum.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/butter-naan.jpeg" alt="Butter Naan" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Breads</div>
+            <div class="item-title">Butter Naan</div>
+            <div class="item-price">₹59</div>
+            <div class="item-desc">Fine flour kneaded with butter and cooked in tandoor, served glazed with butter.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/garlic-naan.jpeg" alt="Garlic Naan" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Breads</div>
+            <div class="item-title">Garlic Naan</div>
+            <div class="item-price">₹64</div>
+            <div class="item-desc">Fine flour bread cooked in tandoor rubbed with garlic chunks.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/lacha-paratha.jpeg" alt="Lacha Paratha" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Breads</div>
+            <div class="item-title">Lacha Paratha</div>
+            <div class="item-price">₹44</div>
+            <div class="item-desc">A light and crispy flatbread filled with spiced potatoes, onions, and green herbs, perfect for a quick and delicious snack.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/missi-roti.jpeg" alt="Missi Roti" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Breads</div>
+            <div class="item-title">Missi Roti</div>
+            <div class="item-price">₹64</div>
+            <div class="item-desc">Savory flatbreads made with a mix of whole wheat flour, gram flour and spices.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/tandoori-butter-roti.jpeg" alt="Tandoori Butter Roti" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Breads</div>
+            <div class="item-title">Tandoori Butter Roti</div>
+            <div class="item-price">₹33</div>
+            <div class="item-desc">Roti of white flour cooked in tandoor, served glazed with butter.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/tandoori-plain-roti.jpeg" alt="Tandoori Plain Roti" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Breads</div>
+            <div class="item-title">Tandoori Plain Roti</div>
+            <div class="item-price">₹28</div>
+            <div class="item-desc">Roti of white flour cooked in tandoor.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/veg-stuffed-naan.jpeg" alt="Veg Stuffed Naan" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Breads</div>
+            <div class="item-title">Veg Stuffed Naan</div>
+            <div class="item-price">₹119</div>
+            <div class="item-desc">Crispy Indian bread stuffed with a combination of finely chopped seasonal vegetables.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/paneer-paratha.jpeg" alt="Paneer Paratha" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Tandoori Paratha</div>
+            <div class="item-title">Paneer Paratha</div>
+            <div class="item-price">₹240</div>
+            <div class="item-desc">Freshly prepared at Greenwood Cafe.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/jeera-rice.jpeg" alt="Jeera Rice" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Rice</div>
+            <div class="item-title">Jeera Rice</div>
+            <div class="item-price">₹198</div>
+            <div class="item-desc">Rice tossed with cumin rice.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/rajma-rice.jpeg" alt="Rajma Rice" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Rice</div>
+            <div class="item-title">Rajma Rice</div>
+            <div class="item-price">₹330</div>
+            <div class="item-desc">Freshly prepared at Greenwood Cafe.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/steamed-rice.jpeg" alt="Steamed Rice" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Rice</div>
+            <div class="item-title">Steamed Rice</div>
+            <div class="item-price">₹176</div>
+            <div class="item-desc">Freshly prepared at Greenwood Cafe.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/veg-fried-rice.jpeg" alt="Veg. Fried Rice" />
+          <div class="item-body">
+            <div class="item-cat">North Indian Main Course &rsaquo; Rice</div>
+            <div class="item-title">Veg. Fried Rice</div>
+            <div class="item-price">₹330</div>
+            <div class="item-desc">Rice tossed with veggies in a wok.</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/dishes/cold-coffee.jpeg" alt="Cold Coffee" />
+          <div class="item-body">
+            <div class="item-cat">Cold Beverages &rsaquo; Cold Coffee</div>
+            <div class="item-title">Cold Coffee</div>
+            <div class="item-price">₹269</div>
+            <div class="item-desc">Rich creamy and irresistible cold coffee created by blending a double shot of espresso and milk.</div>
+          </div>
+        </div>
+      
+    </div>
+
+    <h2>🏡 Restaurant Ambience & Dining Gallery</h2>
+    <div class="cards-grid">
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/ambience/featured_banner.jpg" alt="Greenwood Cafe Featured Banner" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Greenwood Cafe Featured Banner</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/ambience/ambience_main_interior.jpeg" alt="Dining Area & Greenery Ambience" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Dining Area & Greenery Ambience</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/ambience/ambience_lighting_seating.jpeg" alt="Warm Lighting & Table Setup" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Warm Lighting & Table Setup</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/ambience/ambience_cafe_view.jpg" alt="Greenwood Cafe Entrance & Hall" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Greenwood Cafe Entrance & Hall</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/ambience/ambience_cozy_booth.jpeg" alt="Cozy Dining Booth & Decor" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Cozy Dining Booth & Decor</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/ambience/ambience_side_view.jpg" alt="Cafe Interior Perspective" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Cafe Interior Perspective</div>
+          </div>
+        </div>
+      
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-1-greenwood-cafe.jpg" alt="Signature Food Platter" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Signature Food Platter</div>
+            <div class="item-cat">Uploaded by: Greenwood Cafe</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-2-greenwood-cafe.jpg" alt="Special Mocktails & Drinks" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Special Mocktails & Drinks</div>
+            <div class="item-cat">Uploaded by: Greenwood Cafe</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-3-greenwood-cafe.jpg" alt="Crispy Starters Spread" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Crispy Starters Spread</div>
+            <div class="item-cat">Uploaded by: Greenwood Cafe</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-4-mithoon-ahuja.jpg" alt="Diner Review - Delicious North Indian Thali/Curry" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Diner Review - Delicious North Indian Thali/Curry</div>
+            <div class="item-cat">Uploaded by: Mithoon Ahuja</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-5-nitin-nainwal.jpg" alt="Diner Review - Shakes & Starters" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Diner Review - Shakes & Starters</div>
+            <div class="item-cat">Uploaded by: Nitin Nainwal</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-6-nitin-nainwal.jpg" alt="Diner Review - Cafe Table Experience" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Diner Review - Cafe Table Experience</div>
+            <div class="item-cat">Uploaded by: Nitin Nainwal</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-7-vivek-dhankar.jpg" alt="Diner Review - Fresh Food Plating" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Diner Review - Fresh Food Plating</div>
+            <div class="item-cat">Uploaded by: Vivek Dhankar</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-8-rudhransh-saini.jpg" alt="Diner Review - Greenwood Cafe Dine-in" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Diner Review - Greenwood Cafe Dine-in</div>
+            <div class="item-cat">Uploaded by: Rudhransh Saini</div>
+          </div>
+        </div>
+      
+        <div class="item-card">
+          <img class="item-img" src="./images/reviews/review-photo-9-monu.jpg" alt="Diner Review - Fast Food & Snacks" style="height: 220px;" />
+          <div class="item-body">
+            <div class="item-title">Diner Review - Fast Food & Snacks</div>
+            <div class="item-cat">Uploaded by: Monu</div>
+          </div>
+        </div>
+      
+    </div>
+  </div>
+</body>
+</html>
