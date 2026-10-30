@@ -1,3 +1,4 @@
+import { SEARCHABLE_MENU } from '../data/searchableMenu';
 // Pure Firebase Firestore Client SDK & LocalStorage Service for Greenwood Café & Restaurant
 // 100% Serverless & Production-Ready for Firebase Hosting (No Express/SQLite Backend Required)
 
@@ -159,26 +160,20 @@ const DEFAULT_SETTINGS: ApiSettings = {
 
 const DEFAULT_ORDERS: ApiOrder[] = [];
 
-const DEFAULT_DISHES: ApiDish[] = [
-  { id: 'item-1', name: 'Paneer Butter Masala', category: 'North Indian', price: 349, inStock: true, image: '/images/admin/dish_paneer.jpg', description: 'Rich cottage cheese cubes simmered in a luscious butter tomato gravy.', isVeg: true, isTrending: false },
-  { id: 'item-2', name: 'Farmhouse Pizza', category: 'Pizza & Pasta', price: 399, inStock: true, image: '/images/admin/dish_pizza.jpg', description: 'Crispy thin crust topped with bell peppers, olives, corn and mozzarella.', isVeg: true, isTrending: false },
-  { id: 'item-3', name: 'Dal Makhani', category: 'North Indian', price: 249, inStock: true, image: '/images/admin/dish_dal.jpg', description: 'Slow-simmered black lentils infused with white butter and fresh cream.', isVeg: true, isTrending: false },
-  { id: 'item-7', name: 'Shahi Paneer Butter Masala', category: 'North Indian', price: 299, inStock: true, image: '/images/dish-detail/rec-shahi-paneer.jpg', description: 'Royal Mughlai style paneer in creamy cashew almond gravy.', isVeg: true, isTrending: false },
-  { id: 'item-9', name: 'Paneer Tikka Masala', category: 'North Indian', price: 279, inStock: true, image: '/images/dish-detail/rec-paneer-tikka-masala.jpg', description: 'Smoky grilled paneer tikka tossed in spicy tandoori gravy.', isVeg: true, isTrending: true },
-  { id: 'item-10', name: 'Tandoori Tikka Platter', category: 'Starters', price: 299, inStock: true, image: '/images/menu/dish-tandoori-tikka.jpg', description: 'Assorted marinated vegetables & paneer roasted over charcoal.', isVeg: true, isTrending: false },
-  { id: 'item-11', name: 'Steamed Veg Momos', category: 'Starters', price: 199, inStock: true, image: '/images/menu/dish-veg-momos.jpg', description: 'Tender dumplings stuffed with crunchy veggies served with spicy dip.', isVeg: true, isTrending: false },
-  { id: 'item-4', name: 'Mango Lassi', category: 'Beverages & Desserts', price: 129, inStock: true, image: '/images/admin/dish_lassi.jpg', description: 'Chilled Punjabi yogurt churned with sweet Alphonso mango pulp.', isVeg: true },
-  { id: 'item-5', name: 'Garlic Naan', category: 'Breads & Rice', price: 49, inStock: true, image: '/images/admin/dish_naan.jpg', description: 'Tandoor-baked flatbread glazed with crushed garlic and fresh coriander.', isVeg: true },
-  { id: 'item-6', name: 'Butter Naan', category: 'Breads & Rice', price: 59, inStock: true, image: '/images/dish-detail/pairing-butter-naan.jpg', description: 'Fluffy tandoori bread brushed with melted butter.', isVeg: true },
-  { id: 'item-8', name: 'Veg Biryani', category: 'Breads & Rice', price: 180, inStock: true, image: '/images/dish-detail/pairing-jeera-rice.jpg', description: 'Fragrant basmati rice layered with garden vegetables and saffron.', isVeg: true },
-  { id: 'item-12', name: 'Gulab Jamun (2 Pcs)', category: 'Beverages & Desserts', price: 99, inStock: true, image: '/images/offers/dessert_bowl.jpg', description: 'Soft golden milk dumplings soaked in cardamom sugar syrup.', isVeg: true },
-  { id: 'item-13', name: 'Kadhai Paneer Special', category: 'North Indian', price: 289, inStock: true, image: '/images/menu/ni-kadhai-paneer.jpg', description: 'Paneer tossed with crisp bell peppers, whole spices and rich tomato gravy.', isVeg: true },
-  { id: 'item-14', name: 'Chole Bhature Amritsari', category: 'North Indian', price: 189, inStock: true, image: '/images/menu/ni-chole-bhature.jpg', description: 'Authentic spiced chickpea curry served with golden fluffy bhature.', isVeg: true },
-  { id: 'item-15', name: 'Chilli Paneer Crispy', category: 'Starters', price: 250, inStock: true, image: '/images/menu/sig-tandoori-tikka.jpg', description: 'Crisp batter fried paneer tossed with peppers in tangy garlic chilli sauce.', isVeg: true },
-  { id: 'item-16', name: 'Margherita Gourmet Pizza', category: 'Pizza & Pasta', price: 349, inStock: true, image: '/images/menu/sig-farmhouse-pizza.jpg', description: 'Classic Italian thin crust with san marzano tomato sauce, fresh mozzarella and basil.', isVeg: true },
-  { id: 'item-17', name: 'Veg Hakka Noodles', category: 'Chinese', price: 219, inStock: true, image: '/images/menu/sig-veg-momos.jpg', description: 'Wok-tossed noodles with shredded vegetables and aromatic scallions.', isVeg: true },
-  { id: 'item-18', name: 'Jeera Rice Fragrant', category: 'Breads & Rice', price: 140, inStock: true, image: '/images/dish-detail/pairing-jeera-rice.jpg', description: 'Aromatic aged basmati rice tempered with roasted cumin seeds and ghee.', isVeg: true },
-];
+const DEFAULT_DISHES: ApiDish[] = SEARCHABLE_MENU.map((i) => ({
+  id: i.id,
+  name: i.name,
+  category: i.category,
+  subcategory: i.subcategory,
+  price: i.price,
+  inStock: true,
+  image: i.image,
+  description: i.description,
+  isVeg: true,
+  isTrending: Boolean(i.isTrending),
+  rating: i.rating || 4.8,
+  reviews_count: i.reviewsCount || 45,
+}));
 
 export function ensureFullCatalogue(dishesList: ApiDish[]): ApiDish[] {
   if (!dishesList || dishesList.length === 0) return DEFAULT_DISHES;

@@ -22,6 +22,12 @@ export const MenuPage: React.FC<MenuPageProps> = ({
   onAddToCart,
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all');
+
+  // Reset subcategory when main category changes
+  useEffect(() => {
+    setSelectedSubCategory('all');
+  }, [activeCategory]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -105,56 +111,48 @@ export const MenuPage: React.FC<MenuPageProps> = ({
     }));
   }, [searchQuery]);
 
-  // Category specific dishes
+  // Subcategories available for active category
+  const availableSubCategories = useMemo(() => {
+    if (activeCategory === 'all') return [];
+    const dishes = getDishesByCategory(activeCategory);
+    const subMap = new Map<string, number>();
+    dishes.forEach((d) => {
+      const raw = SEARCHABLE_MENU.find((m) => m.id === d.id);
+      if (raw && raw.subcategory) {
+        subMap.set(raw.subcategory, (subMap.get(raw.subcategory) || 0) + 1);
+      }
+    });
+    return Array.from(subMap.entries()).map(([sub, count]) => ({ sub, count }));
+  }, [activeCategory]);
+
+  // Category specific dishes (filtered by subcategory if selected)
   const categoryDishes = useMemo(() => {
     if (activeCategory === 'all') return null;
-    return getDishesByCategory(activeCategory);
-  }, [activeCategory]);
+    let list = getDishesByCategory(activeCategory);
+    if (selectedSubCategory !== 'all') {
+      list = list.filter((d) => {
+        const raw = SEARCHABLE_MENU.find((m) => m.id === d.id);
+        return raw && raw.subcategory === selectedSubCategory;
+      });
+    }
+    return list;
+  }, [activeCategory, selectedSubCategory]);
 
   // Chinese highlights for "All Items" view
   const chineseHighlights: Dish[] = useMemo(() => {
-    return [
-      {
-        id: 'menu-1',
-        name: 'Veg Manchurian Dry',
-        description: 'Crisp vegetable dumplings tossed with hot, sweet, sour & salty aromatic herbs.',
-        price: 200,
-        rating: 4.7,
-        reviewsCount: 88,
+    return SEARCHABLE_MENU.filter((i) => i.category === 'Chinese')
+      .slice(0, 4)
+      .map((i) => ({
+        id: i.id,
+        name: i.name,
+        category: i.category,
+        price: i.price,
+        image: i.image,
+        description: i.description,
+        rating: i.rating || 4.7,
+        reviewsCount: i.reviewsCount || 45,
         isVeg: true,
-        image: '/images/menu/dish-veg-momos.jpg',
-      },
-      {
-        id: 'menu-3',
-        name: 'Chilli Paneer Dry',
-        description: 'Crisp batter-fried paneer cubes tossed with crunchy bell peppers and spicy chilli sauce.',
-        price: 250,
-        rating: 4.8,
-        reviewsCount: 112,
-        isVeg: true,
-        image: '/images/menu/dish-tandoori-tikka.jpg',
-      },
-      {
-        id: 'menu-7',
-        name: 'Veg Hakka Noodles',
-        description: 'Classic wok-tossed noodles with shredded cabbage, carrots, spring onions and light soy.',
-        price: 180,
-        rating: 4.6,
-        reviewsCount: 64,
-        isVeg: true,
-        image: '/images/menu/dish-paneer-butter-masala.jpg',
-      },
-      {
-        id: 'menu-9',
-        name: 'Veg Fried Rice',
-        description: 'Fragrant basmati rice tossed with garden veggies and mild Oriental seasonings.',
-        price: 190,
-        rating: 4.5,
-        reviewsCount: 52,
-        isVeg: true,
-        image: '/images/menu/dish-dal-makhani.jpg',
-      },
-    ];
+      }));
   }, []);
 
   // Render a dish card matching the visual reference mockup
@@ -398,6 +396,37 @@ export const MenuPage: React.FC<MenuPageProps> = ({
                 100% PURE VEGETARIAN FINE DINE
               </p>
             </div>
+
+            {/* Subcategories Filter Pills */}
+            {availableSubCategories.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-4 mb-2 justify-start sm:justify-center">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubCategory('all')}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                    selectedSubCategory === 'all'
+                      ? 'bg-[#163E26] text-white shadow-xs'
+                      : 'bg-[#FAF6EE] text-[#4B5149] border border-[#E8DDCA] hover:border-[#163E26]'
+                  }`}
+                >
+                  All ({getDishesByCategory(activeCategory).length})
+                </button>
+                {availableSubCategories.map(({ sub, count }) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => setSelectedSubCategory(sub)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                      selectedSubCategory === sub
+                        ? 'bg-[#163E26] text-white shadow-xs'
+                        : 'bg-[#FAF6EE] text-[#4B5149] border border-[#E8DDCA] hover:border-[#163E26]'
+                    }`}
+                  >
+                    {sub} ({count})
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
               {categoryDishes.map(renderDishCard)}
