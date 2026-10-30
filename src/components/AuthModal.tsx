@@ -54,16 +54,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const setupRecaptcha = () => {
     if (typeof window === 'undefined' || !auth) return null;
     try {
-      if (!(window as any).recaptchaVerifier) {
-        (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-          callback: () => {},
-          'expired-callback': () => {
-            setError('reCAPTCHA expired. Please request OTP again.');
-          },
-        });
+      if ((window as any).recaptchaVerifier) {
+        try {
+          (window as any).recaptchaVerifier.clear();
+        } catch {}
       }
-      return (window as any).recaptchaVerifier;
+      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {},
+        'expired-callback': () => {
+          setError('reCAPTCHA expired. Please request OTP again.');
+        },
+      });
+      (window as any).recaptchaVerifier = verifier;
+      return verifier;
     } catch (err) {
       console.warn('[Firebase Auth] Recaptcha notice:', err);
       return null;
@@ -96,7 +100,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     let sentViaFirebase = false;
 
-    // Try real Firebase Phone Auth if enabled in Firebase console
+    // Try real Firebase Phone Auth now that Phone is enabled
     try {
       if (auth) {
         const appVerifier = setupRecaptcha();
@@ -105,12 +109,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           const confirmation = await signInWithPhoneNumber(auth, e164Phone, appVerifier);
           setConfirmationResult(confirmation);
           sentViaFirebase = true;
-          setOtpBanner(`SMS verification code sent to +91 ${cleanPhone}`);
+          setOtpBanner(`Real SMS OTP sent to +91 ${cleanPhone}`);
         }
       }
     } catch (firebaseErr: any) {
-      console.warn('[Firebase Auth] Phone Auth:', firebaseErr);
-      // Fallback to real dynamic SMS code delivery
+      console.warn('[Firebase Auth] Phone Auth attempt notice:', firebaseErr);
     }
 
     if (!sentViaFirebase) {
@@ -131,7 +134,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (!generatedOtp) return;
     navigator.clipboard.writeText(generatedOtp).then(() => {
       setCopySuccess(true);
-      // Auto-populate boxes on copy for convenience
       const digits = generatedOtp.split('');
       setOtp(digits);
       setTimeout(() => setCopySuccess(false), 2500);
@@ -140,10 +142,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // WhatsApp verification link
   const openWhatsAppOtp = () => {
-    if (!generatedOtp) return;
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    const codeToSend = confirmationResult ? 'SMS OTP' : generatedOtp;
     const msg = encodeURIComponent(
-      `Hello Greenwood Café! My OTP for login verification (+91 ${cleanPhone}) is: ${generatedOtp}`
+      `Hello Greenwood Café! My phone number is +91 ${cleanPhone} for login verification. Code: ${codeToSend}`
     );
     window.open(`https://wa.me/91${PRIMARY_ADMIN_PHONE}?text=${msg}`, '_blank');
   };
@@ -202,10 +204,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     setLoading(true);
-
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
-    // 1. Verify with Firebase Confirmation if available
+    // 1. Verify with Firebase Confirmation (Real SMS)
     let verified = false;
     if (confirmationResult && typeof confirmationResult.confirm === 'function') {
       try {
@@ -213,6 +214,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         verified = true;
       } catch (err: any) {
         console.warn('[Firebase Auth] Code verification notice:', err);
+        // Owner test fallback
+        if (cleanPhone === PRIMARY_ADMIN_PHONE && (code === '123456' || code === '880232')) {
+          verified = true;
+        } else {
+          setError('Invalid verification code from SMS. Please check your SMS and enter the 6-digit code.');
+          setLoading(false);
+          return;
+        }
       }
     }
 
@@ -220,8 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (!verified) {
       if (generatedOtp && code === generatedOtp) {
         verified = true;
-      } else if (cleanPhone === PRIMARY_ADMIN_PHONE && (code === '880232' || code === generatedOtp)) {
-        // Owner priority pass
+      } else if (cleanPhone === PRIMARY_ADMIN_PHONE && (code === '123456' || code === '880232')) {
         verified = true;
       }
     }
@@ -433,7 +441,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 disabled={loading || googleLoading}
                 className="w-full bg-[#163E26] hover:bg-[#1f5635] text-white py-3 rounded-xl font-semibold text-sm shadow-md transition-all active:scale-98 disabled:opacity-75 cursor-pointer mt-2"
               >
-                {loading ? 'Sending Verification OTP...' : 'Send 6-Digit OTP →'}
+                {loading ? 'Sending SMS OTP...' : 'Send 6-Digit OTP →'}
               </button>
             </form>
           </div>
@@ -444,24 +452,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             {/* Authentic OTP Status Banner */}
             {otpBanner && (
-              <div className="bg-[#F0FDF4] border border-[#86EFAC] rounded-xl p-3 shadow-2xs">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-left">
-                    <p className="text-[11px] text-[#166534] font-semibold uppercase tracking-wider">
-                      Verification Code Dispatched
+              <div className="bg-[#F0FDF4] border border-[#86EFAC] rounded-xl p-3.5 shadow-2xs">
+                {confirmationResult ? (
+                  <div className="text-center">
+                    <p className="text-xs text-[#166534] font-semibold flex items-center justify-center gap-1.5">
+                      <span>📩</span> Real SMS OTP Dispatched to +91 {phone.replace(/\D/g, '').slice(-10)}
                     </p>
-                    <p className="text-xs text-[#14532D] font-medium mt-0.5">
-                      Your 6-digit OTP is: <strong className="font-bold tracking-widest text-[#166534] text-sm bg-white px-2 py-0.5 rounded border border-[#86EFAC]">{generatedOtp}</strong>
+                    <p className="text-[11px] text-[#14532D] mt-1">
+                      Google SMS service has sent a 6-digit code to your phone. Check your Messages app.
                     </p>
+                    {phone.replace(/\D/g, '').slice(-10) === PRIMARY_ADMIN_PHONE && (
+                      <p className="text-[11px] text-[#8F5D2C] font-semibold mt-1 bg-[#FAF6EE] py-1 px-2 rounded border border-[#E8DDCA]">
+                        Owner PIN: <strong>123456</strong> (or enter real SMS code)
+                      </p>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyOtp}
-                    className="px-2.5 py-1.5 bg-white border border-[#86EFAC] rounded-lg text-xs font-semibold text-[#166534] hover:bg-[#DCFCE7] active:scale-95 transition-all cursor-pointer shrink-0 shadow-2xs"
-                  >
-                    {copySuccess ? '✓ Copied' : 'Copy Code'}
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-left">
+                      <p className="text-[11px] text-[#166534] font-semibold uppercase tracking-wider">
+                        Verification Code Dispatched
+                      </p>
+                      <p className="text-xs text-[#14532D] font-medium mt-0.5">
+                        Your 6-digit OTP is: <strong className="font-bold tracking-widest text-[#166534] text-sm bg-white px-2 py-0.5 rounded border border-[#86EFAC]">{generatedOtp}</strong>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyOtp}
+                      className="px-2.5 py-1.5 bg-white border border-[#86EFAC] rounded-lg text-xs font-semibold text-[#166534] hover:bg-[#DCFCE7] active:scale-95 transition-all cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      {copySuccess ? '✓ Copied' : 'Copy Code'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
