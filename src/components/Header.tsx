@@ -127,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
             <img
               src="/logo-official-trimmed.png"
               alt="Greenwood Café"
-              className="shine-logo-img h-[34px] sm:h-[39px] md:h-[42px] w-auto object-contain"
+              className="shine-logo-img h-[40px] sm:h-[46px] md:h-[50px] w-auto object-contain"
             />
             <div className="logo-mask-shine" aria-hidden="true" />
           </div>

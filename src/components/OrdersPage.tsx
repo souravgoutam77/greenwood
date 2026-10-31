@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { VegBadge } from './Icons';
 import { api } from '../services/api';
 import { firestore } from '../services/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { getCustomerAuth, normalizePhone } from '../services/auth';
 
 interface OrderItem {
   id: string;
@@ -175,43 +176,83 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
       }
     };
 
-    // 1. Live Firestore onSnapshot subscription
+    // 1. Live Firestore onSnapshot subscription strictly scoped by customer phone
     let unsubscribeFirestore: (() => void) | null = null;
-    if (firestore) {
-      try {
-        const ordersRef = collection(firestore, 'orders');
-        unsubscribeFirestore = onSnapshot(ordersRef, (snapshot) => {
-          if (!snapshot.empty) {
-            const liveOrders: any[] = [];
-            snapshot.forEach((doc) => {
-              liveOrders.push({ id: doc.id, ...doc.data() });
-            });
-            processOrdersList(liveOrders);
-          } else {
-            processOrdersList([]);
-          }
-        }, (err) => {
-          console.warn('[Orders] Firestore onSnapshot notice:', err);
-        });
-      } catch (err) {
-        console.warn('[Orders] Firestore listener init notice:', err);
-      }
-    }
 
-    // 2. Fetch initial orders from API
-    const loadApiOrders = () => {
-      api.getOrders().then((all) => {
-        if (all) processOrdersList(all);
+    const setupUserOrdersSubscription = (phone?: string) => {
+      if (unsubscribeFirestore) {
+        unsubscribeFirestore();
+        unsubscribeFirestore = null;
+      }
+      const cleanPhone = normalizePhone(phone);
+      if (!cleanPhone) {
+        // Guest or logged-out: do not display another customer's orders
+        setActiveOrder(null);
+        setPastOrders([]);
+        return;
+      }
+
+      if (firestore) {
+        try {
+          const q = query(
+            collection(firestore, 'orders'),
+            where('customerPhone', '==', cleanPhone)
+          );
+          unsubscribeFirestore = onSnapshot(
+            q,
+            (snapshot) => {
+              const userOrders: any[] = [];
+              snapshot.forEach((doc) => {
+                userOrders.push({ id: doc.id, ...doc.data() });
+              });
+              processOrdersList(userOrders);
+            },
+            (err) => {
+              console.warn('[Orders] Scoped Firestore sync notice:', err);
+            }
+          );
+        } catch (err) {
+          console.warn('[Orders] Scoped query init notice:', err);
+        }
+      }
+
+      // Initial API load for this customer
+      api.getOrders({ forPhone: cleanPhone }).then((list) => {
+        if (list && isMounted) processOrdersList(list);
       }).catch(() => {});
     };
-    loadApiOrders();
 
-    // 3. Instant local & cross-tab events listener + BroadcastChannel + polling fallback
+    // Initialize with current authenticated customer
+    const currentAuth = getCustomerAuth();
+    if (currentAuth && currentAuth.verified && currentAuth.phone) {
+      setupUserOrdersSubscription(currentAuth.phone);
+    } else {
+      setActiveOrder(null);
+      setPastOrders([]);
+    }
+
+    // 2. React immediately to account login/logout & account switching
+    const handleAuthChanged = (e: any) => {
+      const user = e.detail;
+      if (user && user.verified && user.phone) {
+        setupUserOrdersSubscription(user.phone);
+      } else {
+        setupUserOrdersSubscription('');
+      }
+    };
+    window.addEventListener('gw_auth_changed', handleAuthChanged);
+
+    // 3. Instant local & cross-tab events listener
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const handleOrdersChanged = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        if (isMounted) loadApiOrders();
+        const auth = getCustomerAuth();
+        if (isMounted && auth?.phone) {
+          api.getOrders({ forPhone: auth.phone }).then((list) => {
+            if (list && isMounted) processOrdersList(list);
+          }).catch(() => {});
+        }
       }, 300);
     };
     window.addEventListener('gw_orders_changed', handleOrdersChanged);
@@ -229,15 +270,13 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
       } catch {}
     }
 
-    const pollInterval = setInterval(loadApiOrders, 12000);
-
     return () => {
       isMounted = false;
       if (unsubscribeFirestore) unsubscribeFirestore();
       if (bc) bc.close();
+      window.removeEventListener('gw_auth_changed', handleAuthChanged);
       window.removeEventListener('gw_orders_changed', handleOrdersChanged);
       window.removeEventListener('storage', handleOrdersChanged);
-      clearInterval(pollInterval);
     };
   }, []);
 

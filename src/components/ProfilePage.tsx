@@ -49,6 +49,40 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   // Saved Addresses State (Clean zero-demo start)
   const [addresses, setAddresses] = useState<Address[]>([]);
 
+  // Sync profile and addresses with persistent backend per authenticated user
+  const fetchUserData = async (phone?: string) => {
+    const auth = getCustomerAuth();
+    const targetPhone = phone || auth?.phone;
+    if (!targetPhone || !auth?.verified) {
+      setAddresses([]);
+      setProfile({
+        name: 'Guest Diner',
+        phone: 'Not signed in',
+        email: '',
+      });
+      return;
+    }
+    try {
+      const [fetchedProfile, fetchedAddresses] = await Promise.all([
+        api.getProfile(targetPhone),
+        api.getAddresses(targetPhone),
+      ]);
+      if (fetchedProfile && fetchedProfile.name && fetchedProfile.name !== 'Greenwood Guest') {
+        setProfile(fetchedProfile);
+        setEditName(fetchedProfile.name);
+        setEditPhone(fetchedProfile.phone);
+        setEditEmail(fetchedProfile.email);
+      }
+      if (fetchedAddresses && Array.isArray(fetchedAddresses)) {
+        setAddresses(fetchedAddresses as Address[]);
+      } else {
+        setAddresses([]);
+      }
+    } catch {
+      // graceful fallback to local defaults
+    }
+  };
+
   // Listen to auth state changes across windows & components
   useEffect(() => {
     const handleAuthChange = () => {
@@ -64,12 +98,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           phone: masked,
           email: freshAuth.email || prev.email,
         }));
+        fetchUserData(freshAuth.phone);
       } else {
         setProfile({
           name: 'Guest Diner',
           phone: 'Not signed in',
           email: '',
         });
+        setAddresses([]);
       }
     };
     window.addEventListener('gw_auth_changed', handleAuthChange);
@@ -89,36 +125,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       phone: 'Not signed in',
       email: '',
     });
+    setAddresses([]);
     showToast('Logged out successfully. See you again at Greenwood!');
   };
 
-  // Sync profile and addresses with persistent backend
+  // Initial fetch on mount
   useEffect(() => {
-    let isMounted = true;
-    const fetchUserData = async () => {
-      try {
-        const [fetchedProfile, fetchedAddresses] = await Promise.all([
-          api.getProfile(),
-          api.getAddresses(),
-        ]);
-        if (!isMounted) return;
-        if (fetchedProfile && fetchedProfile.name && fetchedProfile.name !== 'Guest User') {
-          setProfile(fetchedProfile);
-          setEditName(fetchedProfile.name);
-          setEditPhone(fetchedProfile.phone);
-          setEditEmail(fetchedProfile.email);
-        }
-        if (fetchedAddresses && Array.isArray(fetchedAddresses)) {
-          setAddresses(fetchedAddresses as Address[]);
-        }
-      } catch {
-        // graceful fallback to local defaults
-      }
-    };
     fetchUserData();
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   // Modal & Toast States
@@ -345,7 +358,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                     type="button"
                     onClick={() => {
                       setEditName(profile.name);
-                      setEditPhone(profile.phone);
+                      setEditPhone(userAuth?.phone || profile.phone.replace(/\D/g, ''));
                       setEditEmail(profile.email);
                       setActiveModal({ type: 'edit-profile', title: 'Edit Profile Information' });
                     }}
@@ -401,6 +414,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <button
               type="button"
               onClick={() => {
+                if (!userAuth || !userAuth.verified) {
+                  setShowAuthModal(true);
+                  showToast('Please sign in to save addresses to your Greenwood account.');
+                  return;
+                }
                 setAddrHouse('');
                 setAddrArea('');
                 setAddrLandmark('');
@@ -429,6 +447,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    if (!userAuth || !userAuth.verified) {
+                      setShowAuthModal(true);
+                      showToast('Please sign in to save addresses to your Greenwood account.');
+                      return;
+                    }
                     setAddrHouse('');
                     setAddrArea('');
                     setAddrLandmark('');

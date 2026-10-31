@@ -207,31 +207,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
-    // 1. Verify with Firebase Confirmation (Real SMS)
+    // 1. Verify instantaneous code / WhatsApp / Owner PIN first for zero delay
     let verified = false;
-    if (confirmationResult && typeof confirmationResult.confirm === 'function') {
+    if (generatedOtp && code === generatedOtp) {
+      verified = true;
+    } else if (cleanPhone === PRIMARY_ADMIN_PHONE && (code === '123456' || code === '880232')) {
+      verified = true;
+    } else if (confirmationResult && typeof confirmationResult.confirm === 'function') {
       try {
         await confirmationResult.confirm(code);
         verified = true;
       } catch (err: any) {
         console.warn('[Firebase Auth] Code verification notice:', err);
-        // If carrier SMS is delayed, also check if user entered the WhatsApp OTP code
-        if (generatedOtp && code === generatedOtp) {
-          verified = true;
-        } else {
-          setError('Invalid verification code from SMS. Please check your SMS and enter the 6-digit code.');
-          setLoading(false);
-          return;
-        }
-      }
-    }
-
-    // 2. Fallback to generated real 6-digit OTP verification
-    if (!verified) {
-      if (generatedOtp && code === generatedOtp) {
-        verified = true;
-      } else if (cleanPhone === PRIMARY_ADMIN_PHONE && (code === '123456' || code === '880232')) {
-        verified = true;
+        setError('Invalid verification code from SMS. Please enter the 6-digit code or tap Auto-Fill Code.');
+        setLoading(false);
+        return;
       }
     }
 
@@ -453,32 +443,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             {/* Authentic OTP Status Banner */}
             {otpBanner && (
-              <div className="bg-[#F0FDF4] border border-[#86EFAC] rounded-xl p-3.5 shadow-2xs">
-                {confirmationResult ? (
-                  <div className="text-center">
-                    <p className="text-xs text-[#166534] font-semibold flex items-center justify-center gap-1.5">
-                      <span>📩</span> Real SMS OTP Dispatched to +91 {phone.replace(/\D/g, '').slice(-10)}
+              <div className="bg-[#F0FDF4] border border-[#86EFAC] rounded-xl p-3 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-left">
+                    <p className="text-xs text-[#166534] font-semibold flex items-center gap-1.5">
+                      <span>📩</span> OTP Sent to +91 {phone.replace(/\D/g, '').slice(-10)}
                     </p>
-                    <p className="text-[11px] text-[#14532D] mt-1">
-                      Google SMS service has sent a 6-digit code to your phone. Check your Messages app.
+                    <p className="text-[11px] text-[#14532D] mt-0.5">
+                      {confirmationResult
+                        ? 'Carrier SMS dispatched. If delayed by network, use instant code:'
+                        : 'Your secure verification code:'}
                     </p>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-left">
-                      <p className="text-[11px] text-[#166534] font-semibold uppercase tracking-wider">
-                        Verification Code Dispatched
-                      </p>
-                      <p className="text-xs text-[#14532D] font-medium mt-0.5">
-                        Your 6-digit OTP is: <strong className="font-bold tracking-widest text-[#166534] text-sm bg-white px-2 py-0.5 rounded border border-[#86EFAC]">{generatedOtp}</strong>
-                      </p>
-                    </div>
+                  {generatedOtp && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtp(generatedOtp.split(''));
+                        setCopySuccess(true);
+                        setTimeout(() => setCopySuccess(false), 2000);
+                      }}
+                      className="px-2.5 py-1.5 bg-[#166534] text-white rounded-lg text-xs font-semibold hover:bg-[#14532D] active:scale-95 transition-all cursor-pointer shrink-0 shadow-2xs flex items-center gap-1"
+                    >
+                      <span>⚡</span> {copySuccess ? 'Filled!' : 'Auto-Fill'}
+                    </button>
+                  )}
+                </div>
+                {generatedOtp && (
+                  <div className="pt-1.5 border-t border-[#BBF7D0] flex items-center justify-between text-xs">
+                    <span className="text-[#166534]">
+                      Instant Code: <strong className="font-mono font-bold text-sm bg-white px-2 py-0.5 rounded border border-[#86EFAC] text-[#166534] tracking-widest">{generatedOtp}</strong>
+                    </span>
                     <button
                       type="button"
                       onClick={handleCopyOtp}
-                      className="px-2.5 py-1.5 bg-white border border-[#86EFAC] rounded-lg text-xs font-semibold text-[#166534] hover:bg-[#DCFCE7] active:scale-95 transition-all cursor-pointer shrink-0 shadow-2xs"
+                      className="text-[11px] text-[#166534] font-medium hover:underline cursor-pointer"
                     >
-                      {copySuccess ? '✓ Copied' : 'Copy Code'}
+                      Copy
                     </button>
                   </div>
                 )}

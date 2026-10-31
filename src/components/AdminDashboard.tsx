@@ -221,7 +221,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const loadInitialData = async () => {
       try {
         const [fetchedOrders, fetchedDishes, fetchedSettings, fetchedBanners, fetchedAdmins] = await Promise.all([
-          api.getOrders(),
+          api.getOrders({ forAdmin: true }),
           api.getDishes(),
           api.getSettings(),
           api.getBanners(),
@@ -315,7 +315,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     // Instant local custom events sync across tabs & BroadcastChannel
     const handleLocalOrderChange = async () => {
       try {
-        const freshOrders = await api.getOrders();
+        const freshOrders = await api.getOrders({ forAdmin: true });
         if (isMounted && freshOrders) {
           setOrders(freshOrders as any);
         }
@@ -366,7 +366,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Instant refresh whenever activeSection switches
   useEffect(() => {
-    api.getOrders().then((fresh) => {
+    api.getOrders({ forAdmin: true }).then((fresh) => {
       if (fresh) setOrders(fresh as any);
     }).catch(() => {});
   }, [activeSection]);

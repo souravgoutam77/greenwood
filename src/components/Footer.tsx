@@ -33,7 +33,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavClick, onPolicyClick }) => 
               <img
                 src="/logo-official-trimmed.png"
                 alt="Greenwood Café"
-                className="h-10 md:h-12 w-auto object-contain drop-shadow-xs"
+                className="h-12 md:h-14 w-auto object-contain drop-shadow-xs"
               />
             </div>
 
@@ -155,7 +155,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavClick, onPolicyClick }) => 
               <img
                 src="/logo-official-trimmed.png"
                 alt="Greenwood Café"
-                className="h-7 w-auto object-contain drop-shadow-xs"
+                className="h-8.5 sm:h-9 w-auto object-contain drop-shadow-xs"
               />
               <span className="font-script text-base text-[#E8D094]">
                 {RESTAURANT_DATA.brand.tagline}

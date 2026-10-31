@@ -10,7 +10,11 @@ import {
   setDoc,
   deleteDoc,
   getDoc,
+  query,
+  where,
 } from 'firebase/firestore';
+import { normalizePhone, getCustomerAuth } from './auth';
+import { userService } from './userService';
 
 export interface ApiSettings {
   is_kitchen_open: boolean;
@@ -58,6 +62,7 @@ export interface ApiOrder {
   paymentMode: 'Cash on Delivery' | 'UPI / Online' | 'Card';
   customerName: string;
   customerPhone: string;
+  customerId?: string;
   customerAddressOrTable: string;
   specialInstruction?: string;
   deliveryPartnerName?: string;
@@ -162,8 +167,6 @@ const DEFAULT_SETTINGS: ApiSettings = {
   audio_alerts: true,
 };
 
-const DEFAULT_ORDERS: ApiOrder[] = [];
-
 const DEFAULT_DISHES: ApiDish[] = SEARCHABLE_MENU.map((i) => ({
   id: i.id,
   name: i.name,
@@ -235,8 +238,6 @@ const DEFAULT_PROFILE: ApiProfile = {
   phone: 'Not Signed In',
   email: '',
 };
-
-const DEFAULT_ADDRESSES: ApiAddress[] = [];
 
 // -------------------------------------------------------------------
 // CLIENT STORAGE ADAPTER
@@ -509,44 +510,100 @@ export const api = {
     return { success: true };
   },
 
-  // 3. Orders
-  async getOrders(status?: string, search?: string): Promise<ApiOrder[]> {
-    let list = getStorageItem<ApiOrder[]>('orders', DEFAULT_ORDERS);
+  // 3. Orders (Strictly User-Scoped & Protected)
+  async getOrders(
+    filterOrStatus?: string | { status?: string; search?: string; forPhone?: string; forAdmin?: boolean },
+    search?: string
+  ): Promise<ApiOrder[]> {
+    let statusFilter: string | undefined;
+    let searchFilter: string | undefined = search;
+    let forPhone: string | undefined;
+    let forAdmin = false;
 
-    if (firestore) {
-      withTimeout(getDocs(collection(firestore, 'orders')), 1200)
-        .then((snap) => {
+    if (typeof filterOrStatus === 'object' && filterOrStatus !== null) {
+      statusFilter = filterOrStatus.status;
+      searchFilter = filterOrStatus.search;
+      forPhone = filterOrStatus.forPhone;
+      forAdmin = Boolean(filterOrStatus.forAdmin);
+    } else {
+      statusFilter = filterOrStatus;
+    }
+
+    const currentAuth = getCustomerAuth();
+    const effectivePhone = normalizePhone(forPhone || (!forAdmin ? currentAuth?.phone : undefined));
+
+    // A. Admin mode: fetches all restaurant kitchen orders
+    if (forAdmin) {
+      let adminList = getStorageItem<ApiOrder[]>('orders_admin', []);
+      if (firestore) {
+        try {
+          const snap = await withTimeout(getDocs(collection(firestore, 'orders')), 1500);
           if (!snap.empty) {
             const cloudOrders: ApiOrder[] = [];
             snap.forEach((d) => cloudOrders.push(d.data() as ApiOrder));
-            setStorageItem('orders', cloudOrders, false);
+            cloudOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            setStorageItem('orders_admin', cloudOrders, false);
+            adminList = cloudOrders;
           }
-        })
-        .catch(() => {});
+        } catch (err) {
+          console.warn('[API] Admin orders query notice:', err);
+        }
+      }
+      return this._applyFilters(adminList, statusFilter, searchFilter);
     }
 
+    // B. Customer mode: strictly scoped to logged-in customer phone
+    if (!effectivePhone) {
+      // Unauthenticated visitor has NO order history
+      return [];
+    }
+
+    const storageKey = `orders_${effectivePhone}`;
+    let userList = getStorageItem<ApiOrder[]>(storageKey, []);
+
+    if (firestore) {
+      try {
+        const q = query(collection(firestore, 'orders'), where('customerPhone', '==', effectivePhone));
+        const snap = await withTimeout(getDocs(q), 1500);
+        const cloudOrders: ApiOrder[] = [];
+        snap.forEach((d) => cloudOrders.push(d.data() as ApiOrder));
+        cloudOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        setStorageItem(storageKey, cloudOrders, false);
+        userList = cloudOrders;
+      } catch (err) {
+        console.warn('[API] Customer orders query notice:', err);
+      }
+    }
+
+    return this._applyFilters(userList, statusFilter, searchFilter);
+  },
+
+  _applyFilters(list: ApiOrder[], status?: string, search?: string): ApiOrder[] {
+    let result = [...list];
     if (status && status !== 'All') {
-      list = list.filter((o) => o.status === status);
+      result = result.filter((o) => o.status === status);
     }
     if (search && search.trim()) {
       const q = search.toLowerCase().trim();
-      list = list.filter(
+      result = result.filter(
         (o) =>
           o.id.toLowerCase().includes(q) ||
           o.customerName.toLowerCase().includes(q) ||
           o.customerPhone.includes(q)
       );
     }
-    return list;
+    return result;
   },
 
-  async getLatestOrder(): Promise<ApiOrder | null> {
-    const orders = await this.getOrders();
+  async getLatestOrder(phone?: string): Promise<ApiOrder | null> {
+    const orders = await this.getOrders({ forPhone: phone });
     return orders.length > 0 ? orders[0] : null;
   },
 
   async createOrder(payload: CreateOrderPayload): Promise<{ success: boolean; order: ApiOrder }> {
-    const currentOrders = getStorageItem<ApiOrder[]>('orders', DEFAULT_ORDERS);
+    const cleanPhone = normalizePhone(payload.customerPhone);
+    const storageKey = cleanPhone ? `orders_${cleanPhone}` : 'orders_guest';
+    const currentOrders = getStorageItem<ApiOrder[]>(storageKey, []);
     const newId = `#GW-${Math.floor(1000 + Math.random() * 9000)}`;
     const now = new Date();
     const dateFormatted = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -563,7 +620,8 @@ export const api = {
       orderType: isTakeaway ? 'Takeaway' : payload.orderType === 'dine-in' ? 'Dine-in' : 'Home Delivery',
       paymentMode: (payload.paymentMode as any) || 'Cash on Delivery',
       customerName: payload.customerName || 'Customer',
-      customerPhone: payload.customerPhone || '',
+      customerPhone: cleanPhone,
+      customerId: cleanPhone,
       customerAddressOrTable: payload.customerAddress || 'Narela Hub, Delhi - 110040',
       specialInstruction: payload.specialInstruction,
       items: payload.items.map((it) => ({
@@ -579,7 +637,13 @@ export const api = {
     };
 
     const updatedList = [newOrder, ...currentOrders];
-    setStorageItem('orders', updatedList, true);
+    setStorageItem(storageKey, updatedList, true);
+
+    // Also update admin orders list cache if present
+    try {
+      const adminList = getStorageItem<ApiOrder[]>('orders_admin', []);
+      setStorageItem('orders_admin', [newOrder, ...adminList], false);
+    } catch {}
 
     broadcastCustomEvent('gw_orders_changed', newOrder);
 
@@ -600,31 +664,39 @@ export const api = {
       prepTime?: string;
       deliveryPartnerName?: string;
       deliveryPartnerPhone?: string;
+      customerPhone?: string;
     } = {}
   ): Promise<{ success: boolean; order: ApiOrder }> {
-    const currentOrders = getStorageItem<ApiOrder[]>('orders', DEFAULT_ORDERS);
-    let updatedOrder: ApiOrder | null = null;
     const now = new Date();
     const dateFormatted = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     const timeFormatted = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    const nextList = currentOrders.map((o) => {
-      if (o.id === orderId) {
-        updatedOrder = {
-          ...o,
-          status,
-          declineReason: options.declineReason ?? o.declineReason,
-          prepTime: options.prepTime ?? o.prepTime,
-          completedTime: status === 'Completed' ? `${dateFormatted} at ${timeFormatted}` : o.completedTime,
-          deliveryPartnerName: options.deliveryPartnerName ?? o.deliveryPartnerName,
-          deliveryPartnerPhone: options.deliveryPartnerPhone ?? o.deliveryPartnerPhone,
-        };
-        return updatedOrder;
-      }
-      return o;
-    });
+    // 1. Update in Admin orders list
+    const adminOrders = getStorageItem<ApiOrder[]>('orders_admin', []);
+    const existing = adminOrders.find((o) => o.id === orderId);
+    let updatedOrder: ApiOrder | null = null;
+    if (existing) {
+      updatedOrder = {
+        ...existing,
+        status,
+        declineReason: options.declineReason ?? existing.declineReason,
+        prepTime: options.prepTime ?? existing.prepTime,
+        completedTime: status === 'Completed' ? `${dateFormatted} at ${timeFormatted}` : existing.completedTime,
+        deliveryPartnerName: options.deliveryPartnerName ?? existing.deliveryPartnerName,
+        deliveryPartnerPhone: options.deliveryPartnerPhone ?? existing.deliveryPartnerPhone,
+      };
+    }
+    const nextAdminList = adminOrders.map((o) => (o.id === orderId && updatedOrder ? updatedOrder : o));
+    setStorageItem('orders_admin', nextAdminList, true);
 
-    setStorageItem('orders', nextList, true);
+    // 2. Update in user-scoped cache if known
+    const targetPhone = normalizePhone(options.customerPhone || updatedOrder?.customerPhone || getCustomerAuth()?.phone);
+    if (targetPhone) {
+      const userKey = `orders_${targetPhone}`;
+      const userOrders = getStorageItem<ApiOrder[]>(userKey, []);
+      const nextUserList = userOrders.map((o) => (o.id === orderId && updatedOrder ? updatedOrder : o));
+      setStorageItem(userKey, nextUserList, true);
+    }
 
     broadcastCustomEvent('gw_orders_changed', updatedOrder);
 
@@ -634,16 +706,21 @@ export const api = {
       });
     }
 
-    return { success: true, order: updatedOrder || (currentOrders[0] as ApiOrder) };
+    return { success: true, order: updatedOrder || (adminOrders[0] as ApiOrder) };
   },
 
   async submitOrderReview(
     orderId: string,
     rating: number,
     reviewText = '',
-    reviewPhoto = ''
+    reviewPhoto = '',
+    customerPhone?: string
   ): Promise<{ success: boolean }> {
-    const currentOrders = getStorageItem<ApiOrder[]>('orders', DEFAULT_ORDERS);
+    const currentAuth = getCustomerAuth();
+    const phone = normalizePhone(customerPhone || currentAuth?.phone);
+    const storageKey = phone ? `orders_${phone}` : 'orders_guest';
+    const currentOrders = getStorageItem<ApiOrder[]>(storageKey, []);
+
     let updatedOrder: ApiOrder | null = null;
     const nextList = currentOrders.map((o) => {
       if (o.id === orderId) {
@@ -659,7 +736,15 @@ export const api = {
       return o;
     });
 
-    setStorageItem('orders', nextList, true);
+    setStorageItem(storageKey, nextList, true);
+
+    // Also update in admin list
+    try {
+      const adminOrders = getStorageItem<ApiOrder[]>('orders_admin', []);
+      const nextAdminList = adminOrders.map((o) => (o.id === orderId && updatedOrder ? updatedOrder : o));
+      setStorageItem('orders_admin', nextAdminList, false);
+    } catch {}
+
     broadcastCustomEvent('gw_orders_changed', updatedOrder);
 
     if (firestore && updatedOrder) {
@@ -672,6 +757,7 @@ export const api = {
         id: safeReviewId,
         orderId,
         customerName: (updatedOrder as any).customerName || 'Greenwood Guest',
+        customerPhone: phone || '',
         rating,
         reviewText,
         reviewPhoto,
@@ -682,43 +768,59 @@ export const api = {
     return { success: true };
   },
 
-  // 4. Profile & Addresses
-  async getProfile(): Promise<ApiProfile> {
-    return getStorageItem<ApiProfile>('profile', DEFAULT_PROFILE);
-  },
-
-  async updateProfile(profile: Partial<ApiProfile>): Promise<{ success: boolean; profile: ApiProfile }> {
-    const current = getStorageItem<ApiProfile>('profile', DEFAULT_PROFILE);
-    const updated = { ...current, ...profile };
-    setStorageItem('profile', updated);
-    return { success: true, profile: updated };
-  },
-
-  async getAddresses(): Promise<ApiAddress[]> {
-    return getStorageItem<ApiAddress[]>('addresses', DEFAULT_ADDRESSES);
-  },
-
-  async addAddress(address: Partial<ApiAddress>): Promise<{ success: boolean; address: ApiAddress }> {
-    const current = getStorageItem<ApiAddress[]>('addresses', DEFAULT_ADDRESSES);
-    const newAddr: ApiAddress = {
-      id: `addr-${Date.now()}`,
-      type: address.type || 'Home',
-      addressLine: address.addressLine || 'Narela Hub, Delhi',
-      phone: address.phone || '+91 90669 06607',
-      isDefault: address.isDefault ?? false,
+  // 4. Profile & Addresses (Strictly isolated per user via userService & Firestore /users/{phone})
+  async getProfile(phone?: string): Promise<ApiProfile> {
+    const clean = normalizePhone(phone || getCustomerAuth()?.phone);
+    if (!clean) return DEFAULT_PROFILE;
+    const userDoc = await userService.getUserProfile(clean);
+    return {
+      name: userDoc.name,
+      phone: `+91 ${clean.slice(0, 5)} XXXXX`,
+      email: userDoc.email || '',
     };
-    const nextList = newAddr.isDefault
-      ? [newAddr, ...current.map((a) => ({ ...a, isDefault: false }))]
-      : [...current, newAddr];
-
-    setStorageItem('addresses', nextList);
-    return { success: true, address: newAddr };
   },
 
-  async deleteAddress(addressId: string): Promise<{ success: boolean }> {
-    const current = getStorageItem<ApiAddress[]>('addresses', DEFAULT_ADDRESSES);
-    const nextList = current.filter((a) => a.id !== addressId);
-    setStorageItem('addresses', nextList);
+  async updateProfile(profile: Partial<ApiProfile>, phone?: string): Promise<{ success: boolean; profile: ApiProfile }> {
+    const clean = normalizePhone(phone || getCustomerAuth()?.phone);
+    if (!clean) return { success: false, profile: DEFAULT_PROFILE };
+    const userDoc = await userService.updateUserProfile(clean, {
+      name: profile.name,
+      email: profile.email,
+    });
+    return {
+      success: true,
+      profile: {
+        name: userDoc.name,
+        phone: `+91 ${clean.slice(0, 5)} XXXXX`,
+        email: userDoc.email || '',
+      },
+    };
+  },
+
+  async getAddresses(phone?: string): Promise<ApiAddress[]> {
+    const clean = normalizePhone(phone || getCustomerAuth()?.phone);
+    if (!clean) return [];
+    const addrs = await userService.getUserAddresses(clean);
+    return addrs as any;
+  },
+
+  async addAddress(address: Partial<ApiAddress>, phone?: string): Promise<{ success: boolean; address: ApiAddress }> {
+    const clean = normalizePhone(phone || getCustomerAuth()?.phone);
+    if (!clean) throw new Error('Sign in required to save addresses');
+    const addrs = await userService.addUserAddress(clean, {
+      type: (address.type as any) || 'Home',
+      addressLine: address.addressLine || 'Narela Hub, Delhi',
+      phone: address.phone || clean,
+      isDefault: Boolean(address.isDefault),
+    });
+    const created = addrs[addrs.length - 1];
+    return { success: true, address: created as any };
+  },
+
+  async deleteAddress(addressId: string, phone?: string): Promise<{ success: boolean }> {
+    const clean = normalizePhone(phone || getCustomerAuth()?.phone);
+    if (!clean) return { success: false };
+    await userService.deleteUserAddress(clean, addressId);
     return { success: true };
   },
 
