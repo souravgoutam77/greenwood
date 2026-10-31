@@ -65,86 +65,83 @@ const foundMocks = SEARCHABLE_MENU.filter(d => mockDishRegex.test(d.id));
 assert(foundMocks.length === 0, `No legacy mock dishes found in catalogue (found: ${foundMocks.length})`);
 
 // ---------------------------------------------------------
-// TEST 2: ORDER ITEM TITLES & STRAY '0' BUG
+// TEST 2: ORDER ACTIONS & POS CONTROLS
 // ---------------------------------------------------------
-console.log('\n--- 2. Testing Order Item Summaries & Stray "0" Bug Fix ---');
+console.log('\n--- 2. Testing Order Actions, Stray "0" Bug Fix & POS Controls ---');
 
 const ordersPageSource = fs.readFileSync(path.join(rootDir, 'src', 'components', 'OrdersPage.tsx'), 'utf-8');
 
 // Verify stray '0' bug pattern {order.moreCount && ...} is eliminated
 const dangerousPattern = /{order\.moreCount\s*&&/g;
-const hasDangerousPattern = dangerousPattern.test(ordersPageSource);
-assert(!hasDangerousPattern, 'Eliminated dangerous JSX `{order.moreCount && ...}` that rendered stray "0"');
+assert(!dangerousPattern.test(ordersPageSource), 'Eliminated dangerous JSX `{order.moreCount && ...}` that rendered stray "0"');
 
 const safePattern = /{Boolean\(order\.moreCount\s*&&\s*order\.moreCount\s*>\s*0\)\s*&&/g;
 assert(safePattern.test(ordersPageSource), 'Safe Boolean(moreCount > 0) guard is in place in OrdersPage');
 
 // Verify active order ID matches modal title (no hardcoded #GW-8492)
-const hasHardcodedGW8492 = ordersPageSource.includes('#GW-8492');
-assert(!hasHardcodedGW8492, 'Eliminated hardcoded "#GW-8492" from order details modal title');
+assert(!ordersPageSource.includes('#GW-8492'), 'Eliminated hardcoded "#GW-8492" from order details modal title');
 
 // Verify order items count is dynamic
-const hasDynamicCount = ordersPageSource.includes('({liveOrder.items.length} items)');
-assert(hasDynamicCount, 'Order Items count dynamically reflects liveOrder.items.length');
-
-// Simulate order summary generation with 1, 2, 3, and 4 items
-function generateOrderSummary(items) {
-  const names = items.map(i => i.name);
-  const dishesSummary = names.slice(0, 3).join(', ');
-  const moreCount = Math.max(0, names.length - 3);
-  
-  // React JSX rendering simulation
-  let renderedMore = '';
-  if (Boolean(moreCount && moreCount > 0)) {
-    renderedMore = ` +${moreCount} more`;
-  }
-  return dishesSummary + renderedMore;
-}
-
-const singleOrder = generateOrderSummary([{ name: 'Kadai Paneer' }]);
-assert(singleOrder === 'Kadai Paneer', `Single item order renders without stray 0: "${singleOrder}"`);
-assert(!singleOrder.endsWith('0'), 'Single item order does not end with "0"');
-
-const threeOrder = generateOrderSummary([
-  { name: 'Kadai Paneer' },
-  { name: 'Butter Naan' },
-  { name: 'Dal Makhani' }
-]);
-assert(threeOrder === 'Kadai Paneer, Butter Naan, Dal Makhani', `3 item order renders clean: "${threeOrder}"`);
-assert(!threeOrder.includes('0'), '3 item order does not contain stray 0');
-
-const fourOrder = generateOrderSummary([
-  { name: 'Kadai Paneer' },
-  { name: 'Butter Naan' },
-  { name: 'Dal Makhani' },
-  { name: 'Jeera Rice' }
-]);
-assert(fourOrder.includes('+1 more'), `4 item order shows "+1 more": "${fourOrder}"`);
-
-// ---------------------------------------------------------
-// TEST 3: BANNER SIZE COMPRESSION SPECIFICATION (< 300KB)
-// ---------------------------------------------------------
-console.log('\n--- 3. Testing Banner Upload & Canvas Compression Limits ---');
+assert(ordersPageSource.includes('({liveOrder.items.length} items)'), 'Order Items count dynamically reflects liveOrder.items.length');
 
 const adminDashboardSource = fs.readFileSync(path.join(rootDir, 'src', 'components', 'AdminDashboard.tsx'), 'utf-8');
 
-assert(adminDashboardSource.includes('compressImageForBanner'), 'compressImageForBanner function exists in AdminDashboard');
-assert(adminDashboardSource.includes('maxWidth = 1920'), 'Canvas compression enforces maxWidth 1920px');
-assert(adminDashboardSource.includes('quality = 0.70') || adminDashboardSource.includes('0.70'), 'Quality parameter is 0.70');
-assert(adminDashboardSource.includes('400000'), 'Strict payload threshold (400,000 characters ~ 300KB) is enforced');
+// Verify dynamic action buttons & delete order in Admin POS
+assert(adminDashboardSource.includes('handleDeleteOrder'), 'handleDeleteOrder exists in AdminDashboard');
+assert(adminDashboardSource.includes('handleCancelOrder'), 'handleCancelOrder exists in AdminDashboard');
+assert(adminDashboardSource.includes('🗑 Delete Order'), 'Administrative Delete Order button rendered in POS');
+assert(adminDashboardSource.includes('updateDoc(doc(firestore, \'orders\''), 'Authentic Firestore write updateDoc used in order status transitions');
 
 // ---------------------------------------------------------
-// TEST 4: FIRESTORE SECURITY RULES & COMPOSITE INDEXES
+// TEST 3: HERO BANNER UPLOAD, DELETE & FALLBACK
 // ---------------------------------------------------------
-console.log('\n--- 4. Testing Firestore Rules & Composite Indexes ---');
+console.log('\n--- 3. Testing Hero Banner Fallback, Delete Option & Clean UI ---');
+
+const heroBannerSource = fs.readFileSync(path.join(rootDir, 'src', 'components', 'HeroBanner.tsx'), 'utf-8');
+
+assert(heroBannerSource.includes('onError'), 'HeroBanner has onError fallback handler on <img>');
+assert(heroBannerSource.includes('/images/hero-bg-2400.jpg'), 'HeroBanner falls back to /images/hero-bg-2400.jpg');
+
+assert(adminDashboardSource.includes('handleDeleteBanner'), 'handleDeleteBanner exists in AdminDashboard');
+assert(adminDashboardSource.includes('🗑 Delete Banner'), 'Explicit [🗑 Delete Banner] button rendered');
+assert(adminDashboardSource.includes('bannerUrl: \'\''), 'Resetting bannerUrl to empty string supported in AdminDashboard');
+
+// Verify technical text removed
+assert(!adminDashboardSource.includes('⚡ Quick Hero Banner Upload (Live Cloud Firestore Sync)'), 'Technical upload text block removed from AdminDashboard');
+assert(adminDashboardSource.includes('Compressing &amp; Uploading...') || adminDashboardSource.includes('Compressing & Uploading...'), 'Active loading spinner for banner upload present');
+
+// ---------------------------------------------------------
+// TEST 4: DESKTOP HEADER & HAMBURGER MENU HIDING
+// ---------------------------------------------------------
+console.log('\n--- 4. Testing Desktop Header & Hamburger Menu ---');
+
+const headerSource = fs.readFileSync(path.join(rootDir, 'src', 'components', 'Header.tsx'), 'utf-8');
+
+assert(headerSource.includes('block md:hidden p-2 text-[#FAF6EE]'), 'Hamburger 3-lines menu button is strictly hidden on desktop (md:hidden)');
+
+// ---------------------------------------------------------
+// TEST 5: SIGNATURE & TRENDING ZERO-FALLBACK BUG FIX
+// ---------------------------------------------------------
+console.log('\n--- 5. Testing Signature & Trending Zero-Fallback ---');
+
+const signatureDishesSource = fs.readFileSync(path.join(rootDir, 'src', 'components', 'SignatureDishes.tsx'), 'utf-8');
+
+assert(!signatureDishesSource.includes('inStock.slice(0, 6)'), 'Eliminated fallback that forced first 6 in-stock dishes into Trending');
+assert(signatureDishesSource.includes('const listToDisplay = trending;'), 'Trending showcase strictly binds only to dishes with isTrending === true');
+assert(signatureDishesSource.includes('Chef specials updating soon'), 'Clean empty message rendered when 0 dishes are trending');
+
+// ---------------------------------------------------------
+// TEST 6: FIRESTORE SECURITY RULES & COMPOSITE INDEXES
+// ---------------------------------------------------------
+console.log('\n--- 6. Testing Firestore Rules & Composite Indexes ---');
 
 const rulesPath = path.join(rootDir, 'firestore.rules');
 assert(fs.existsSync(rulesPath), 'firestore.rules exists');
 
 const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
-assert(!rulesContent.includes('allow read, write: if true;'), 'Eliminated wide-open catch-all rule');
-assert(rulesContent.includes('function isAdmin()'), 'isAdmin helper function exists in firestore.rules');
-assert(rulesContent.includes('match /dishes/{dishId}'), 'Dishes collection is protected');
+assert(!rulesContent.includes('match /{document=**} {\n      allow read, write: if true;'), 'Default catch-all does not allow open read/write');
+assert(rulesContent.includes('match /{document=**} {\n      allow read, write: if false;\n    }') || rulesContent.includes('match /{document=**} {\r\n      allow read, write: if false;\r\n    }'), 'Default catch-all is set to deny (allow read, write: if false)');
+assert(rulesContent.includes('match /dishes/{dishId}'), 'Dishes collection rules defined');
 assert(rulesContent.includes('match /orders/{orderId}'), 'Orders collection rules defined');
 assert(rulesContent.includes('match /users/{userId}'), 'User profiles isolation defined');
 

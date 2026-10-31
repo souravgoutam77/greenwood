@@ -320,11 +320,11 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Hamburger Icon */}
+          {/* Hamburger Icon (Visible on mobile only, hidden on desktop md: and above) */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-[#FAF6EE] hover:text-[#C9A45C] focus:outline-none focus:ring-2 focus:ring-[#C9A45C] rounded-md transition-colors"
+            className="block md:hidden p-2 text-[#FAF6EE] hover:text-[#C9A45C] focus:outline-none focus:ring-2 focus:ring-[#C9A45C] rounded-md transition-colors"
             aria-expanded={mobileMenuOpen}
             aria-label="Toggle navigation menu"
           >

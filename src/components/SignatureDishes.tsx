@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { LeafBranch, VegBadge } from './Icons';
-import { RESTAURANT_DATA } from '../data/restaurantData';
 import type { Dish } from '../data/restaurantData';
 import { api, computeEffectiveStoreStatus, isLegacyMockDishId } from '../services/api';
 import { firestore } from '../services/firebase';
@@ -23,9 +22,12 @@ const formatSignatureDishes = (allDishes: any[]): Dish[] => {
   // Sirf wahi dishes show hongi jisme admin ne Signature & Trending on kiya hai
   const trending = inStock.filter((d) => Boolean(d.isTrending));
 
+  // Strictly show ONLY dishes with isTrending === true (zero fallback to general inStock items)
+  const listToDisplay = trending;
+
   // If admin has selected specific dishes, strictly show ONLY those selected dishes (no cap of 4!)
   // Fallback to top in-stock dishes only if admin hasn't marked any dish yet
-  const listToDisplay = trending.length > 0 ? trending : inStock.slice(0, 6);
+
 
   return listToDisplay.map((d) => ({
     id: d.id,
@@ -109,10 +111,7 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
   }, []);
 
   // Synchronous cache-first initialization to prevent ANY 1-second flash or layout shift!
-  const [dishes, setDishes] = useState<Dish[]>(() => {
-    const initial = formatSignatureDishes(api.getDishesSync());
-    return initial.length > 0 ? initial : RESTAURANT_DATA.signatureDishes;
-  });
+  const [dishes, setDishes] = useState<Dish[]>(() => formatSignatureDishes(api.getDishesSync()));
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -135,20 +134,18 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
       });
 
       const formatted = formatSignatureDishes(fullList);
-      if (formatted.length > 0) {
-        setDishes((prev) => {
-          const isSame =
-            prev.length === formatted.length &&
-            prev.every(
-              (d, i) =>
-                d.id === formatted[i]?.id &&
-                d.price === formatted[i]?.price &&
-                d.isTrending === formatted[i]?.isTrending &&
-                d.image === formatted[i]?.image
-            );
-          return isSame ? prev : formatted;
-        });
-      }
+      setDishes((prev) => {
+        const isSame =
+          prev.length === formatted.length &&
+          prev.every(
+            (d, i) =>
+              d.id === formatted[i]?.id &&
+              d.price === formatted[i]?.price &&
+              d.isTrending === formatted[i]?.isTrending &&
+              d.image === formatted[i]?.image
+          );
+        return isSame ? prev : formatted;
+      });
     };
 
     // 1. Live Firestore onSnapshot subscription
@@ -309,6 +306,18 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
       setAddedItems((prev) => ({ ...prev, [dish.id]: false }));
     }, 1500);
   };
+
+  if (dishes.length === 0) {
+    return (
+      <section className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-3 select-none" aria-label="Signature &amp; Trending Dishes">
+        <div className="text-center py-7 px-4 bg-[#FAF6EE] rounded-2xl border border-[#E8DDCA]/60">
+          <LeafBranch flip={false} className="w-6 h-3 text-[#2E5A3A] mx-auto mb-2 opacity-80" />
+          <h3 className="font-serif text-base sm:text-lg font-bold text-[#163E26]">Signature &amp; Trending</h3>
+          <p className="text-xs text-[#77766D] mt-1 font-sans">Chef specials updating soon. Explore our full 100% Pure Vegetarian menu!</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 md:pt-5 pb-2 sm:pb-3 md:pb-3.5" aria-label="Signature &amp; Trending Dishes">

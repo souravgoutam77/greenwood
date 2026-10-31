@@ -753,6 +753,34 @@ export const api = {
     return { success: true, order: updatedOrder || (adminOrders[0] as ApiOrder) };
   },
 
+  async deleteOrder(orderId: string): Promise<{ success: boolean }> {
+    const adminOrders = getStorageItem<ApiOrder[]>('orders_admin', []);
+    const nextAdmin = adminOrders.filter((o) => o.id !== orderId);
+    setStorageItem('orders_admin', nextAdmin, false);
+
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('gw_orders_')) {
+          const userOrders = getStorageItem<ApiOrder[]>(key.replace('gw_', ''), []);
+          const nextUser = userOrders.filter((o) => o.id !== orderId);
+          setStorageItem(key.replace('gw_', ''), nextUser, false);
+        }
+      }
+    } catch {}
+
+    broadcastCustomEvent('gw_orders_changed', { deletedId: orderId });
+
+    if (firestore) {
+      try {
+        await deleteDoc(doc(firestore, 'orders', orderId));
+      } catch (err) {
+        console.warn('Firestore deleteOrder error:', err);
+      }
+    }
+    return { success: true };
+  },
+
   async submitOrderReview(
     orderId: string,
     rating: number,

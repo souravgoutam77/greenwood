@@ -8,8 +8,8 @@ const FALLBACK_BANNERS: ApiBanner[] = [
     id: 'banner-1',
     title: 'Good Food. Greener Moods.',
     subtitle: '100% Pure Vegetarian Fine Dining in Narela',
-    imageDesktop: '/images/hero-banner.jpg',
-    imageMobile: '/images/hero-banner-mobile.jpg',
+    imageDesktop: '/images/hero-bg-2400.jpg',
+    imageMobile: '/images/hero-bg-mobile-1200.jpg',
     linkUrl: '#menu',
     isActive: true,
     displayOrder: 1,
@@ -74,19 +74,21 @@ export const HeroBanner: React.FC = () => {
           (snapshot) => {
             if (snapshot.exists() && isMounted) {
               const data = snapshot.data();
-              if (data?.bannerUrl) {
-                setBanners((prev) => {
-                  const updated = [...prev];
-                  if (updated.length > 0) {
-                    updated[0] = {
-                      ...updated[0],
-                      imageDesktop: data.bannerUrl,
-                      imageMobile: data.bannerUrl,
-                    };
-                  }
-                  return updated;
-                });
-              }
+              const effectiveUrl =
+                data?.bannerUrl && typeof data.bannerUrl === 'string' && data.bannerUrl.trim().length > 0
+                  ? data.bannerUrl
+                  : '/images/hero-bg-2400.jpg';
+              setBanners((prev) => {
+                const updated = [...prev];
+                if (updated.length > 0) {
+                  updated[0] = {
+                    ...updated[0],
+                    imageDesktop: effectiveUrl,
+                    imageMobile: effectiveUrl,
+                  };
+                }
+                return updated;
+              });
             }
           },
           (err) => console.warn('[HeroBanner] storeConfig sync notice:', err)
@@ -172,15 +174,23 @@ export const HeroBanner: React.FC = () => {
         <div className="relative w-full aspect-[4/3] sm:aspect-[21/9] md:aspect-[674/144] min-h-[220px] sm:min-h-0 overflow-hidden">
           {banners.map((slide, index) => {
             const isActive = index === currentSlide;
+            const desktopSrc = slide.imageDesktop || '/images/hero-bg-2400.jpg';
+            const mobileSrc = slide.imageMobile || desktopSrc;
             const content = (
               <picture className="w-full h-full block">
-                <source media="(max-width: 640px)" srcSet={slide.imageMobile || slide.imageDesktop} />
+                <source media="(max-width: 640px)" srcSet={mobileSrc} />
                 <img
-                  src={slide.imageDesktop}
+                  src={desktopSrc}
                   alt={slide.title || 'Greenwood Cafe Special'}
                   className="w-full h-full object-cover object-center"
                   loading={index === 0 ? 'eager' : 'lazy'}
                   decoding="async"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (!img.src.includes('hero-bg-2400.jpg')) {
+                      img.src = '/images/hero-bg-2400.jpg';
+                    }
+                  }}
                 />
               </picture>
             );

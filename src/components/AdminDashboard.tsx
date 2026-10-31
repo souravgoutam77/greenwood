@@ -3,7 +3,7 @@ import { VegBadge, LeafBranch } from './Icons';
 import { api, ensureFullCatalogue, computeEffectiveStoreStatus, isLegacyMockDishId, type ApiBanner } from '../services/api';
 import { compressImageToBlob, uploadImageToStorage } from '../services/storageService';
 import { firestore } from '../services/firebase';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 // Web Audio API POS notification chime synthesizer (D5 - A5 - D6 chord)
 function playOrderChime() {
@@ -528,16 +528,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     showToast('Admin session locked.');
   };
 
-  // Order Actions & Transitions (Connected to SQLite REST API)
+  // Order Actions & Transitions (Direct Firestore Cloud Sync & POS controls)
   const handleAcceptOrder = async (orderId: string) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: 'Preparing', prepTime: 'Prep: 18 mins' } : o))
     );
     showToast(`Order ${orderId} accepted & sent to kitchen!`);
     try {
+      if (firestore) {
+        await updateDoc(doc(firestore, 'orders', orderId), {
+          status: 'Preparing',
+          prepTime: 'Prep: 18 mins',
+          updatedAt: serverTimestamp(),
+        });
+      }
       await api.updateOrderStatus(orderId, 'Preparing', { prepTime: 'Prep: 18 mins' });
     } catch (err) {
-      console.error('Failed to sync accepted status to API:', err);
+      console.error('Failed to sync accepted status to API/Firestore:', err);
     }
   };
 
@@ -582,13 +589,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     showToast(`Order ${orderId} dispatched with rider ${name}!`);
 
     try {
+      if (firestore) {
+        await updateDoc(doc(firestore, 'orders', orderId), {
+          status: 'Out for Delivery',
+          prepTime: 'Out for Delivery',
+          deliveryPartnerName: name,
+          deliveryPartnerPhone: phone,
+          updatedAt: serverTimestamp(),
+        });
+      }
       await api.updateOrderStatus(orderId, 'Out for Delivery', {
         prepTime: 'Out for Delivery',
         deliveryPartnerName: name,
         deliveryPartnerPhone: phone,
       });
     } catch (err) {
-      console.error('Failed to sync dispatch status to API:', err);
+      console.error('Failed to sync dispatch status to API/Firestore:', err);
     }
   };
 
@@ -598,21 +614,70 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     );
     showToast(`Order ${orderId} marked ready for pickup!`);
     try {
+      if (firestore) {
+        await updateDoc(doc(firestore, 'orders', orderId), {
+          status: 'Out for Delivery',
+          prepTime: 'Ready for Pickup',
+          updatedAt: serverTimestamp(),
+        });
+      }
       await api.updateOrderStatus(orderId, 'Out for Delivery', { prepTime: 'Ready for Pickup' });
     } catch (err) {
-      console.error('Failed to sync ready status to API:', err);
+      console.error('Failed to sync ready status to API/Firestore:', err);
     }
   };
 
   const handleMarkCompleted = async (orderId: string) => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'Completed', completedTime: 'Just now' } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, status: 'Completed', completedTime: 'Just now', prepTime: 'Delivered' } : o))
     );
-    showToast(`Order ${orderId} marked completed!`);
+    showToast(`Order ${orderId} marked completed & delivered!`);
     try {
-      await api.updateOrderStatus(orderId, 'Completed');
+      if (firestore) {
+        await updateDoc(doc(firestore, 'orders', orderId), {
+          status: 'Completed',
+          completedTime: 'Just now',
+          prepTime: 'Delivered',
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await api.updateOrderStatus(orderId, 'Completed', { prepTime: 'Delivered' });
     } catch (err) {
-      console.error('Failed to sync completed status to API:', err);
+      console.error('Failed to sync completed status to API/Firestore:', err);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (!window.confirm(`Are you sure you want to cancel Order ${orderId}?`)) return;
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: 'Declined' } : o))
+    );
+    showToast(`Order ${orderId} marked as Cancelled/Declined.`);
+    try {
+      if (firestore) {
+        await updateDoc(doc(firestore, 'orders', orderId), {
+          status: 'Declined',
+          declineReason: 'Cancelled by kitchen admin',
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await api.updateOrderStatus(orderId, 'Declined', { declineReason: 'Cancelled by kitchen admin' });
+    } catch (err) {
+      console.error('Failed to sync cancel status to API/Firestore:', err);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete Order ${orderId} from the database? This cannot be undone.`)) return;
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    showToast(`Order ${orderId} deleted permanently.`);
+    try {
+      if (firestore) {
+        await deleteDoc(doc(firestore, 'orders', orderId));
+      }
+      await api.deleteOrder(orderId);
+    } catch (err) {
+      console.error('Failed to delete order from API/Firestore:', err);
     }
   };
 
@@ -637,6 +702,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     );
 
     try {
+      if (firestore) {
+        await setDoc(
+          doc(firestore, 'dishes', dishId),
+          {
+            id: dishId,
+            name: currentItem.name,
+            isTrending: nextState,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
       await api.updateDish(dishId, { isTrending: nextState });
       showToast(
         nextState
@@ -690,9 +767,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setDeclineReasonInput('');
     showToast(`Order ${orderId} declined.`);
     try {
+      if (firestore) {
+        await updateDoc(doc(firestore, 'orders', orderId), {
+          status: 'Declined',
+          declineReason: reason,
+          updatedAt: serverTimestamp(),
+        });
+      }
       await api.updateOrderStatus(orderId, 'Declined', { declineReason: reason });
     } catch (err) {
-      console.error('Failed to sync decline status to API:', err);
+      console.error('Failed to sync decline status to API/Firestore:', err);
     }
   };
 
@@ -894,12 +978,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!file) return;
     try {
       setCompressingImage(true);
-      setCompressedSizeInfo('Compressing banner image (< 300KB)...');
+      setCompressedSizeInfo('Compressing & Uploading...');
 
       // 1. In-browser Canvas compression: max width 1920px, JPEG 0.70, < 300KB
       const compressedBase64 = await compressImageForBanner(file, 1920, 0.70);
-      const sizeKb = Math.round((compressedBase64.length * 0.75) / 1024);
-      setCompressedSizeInfo(`Compressed: ${sizeKb} KB. Uploading to Firestore...`);
 
       // 2. Save directly to doc(db, 'settings', 'storeConfig') under field bannerUrl
       if (firestore) {
@@ -921,11 +1003,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         }, { merge: true });
       }
 
-      alert('Banner updated successfully!');
-      showToast('Banner updated successfully!');
+      showToast('✓ Hero banner uploaded and live on website!');
     } catch (error: any) {
       console.error('Banner upload error:', error);
-      alert('Banner upload failed: ' + (error?.message || 'Unknown error'));
       showToast('Banner upload failed: ' + (error?.message || 'Unknown error'));
     } finally {
       setCompressingImage(false);
@@ -1054,12 +1134,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteBanner = async (bannerId: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete this banner?`)) return;
+
     setBanners((prev) => prev.filter((b) => b.id !== bannerId));
     try {
       await api.deleteBanner(bannerId);
-      showToast('Banner deleted.');
-    } catch (err) {
+
+      // Also reset storeConfig.bannerUrl if deleting custom banner or primary banner
+      if (firestore) {
+        await setDoc(
+          doc(firestore, 'settings', 'storeConfig'),
+          { bannerUrl: '', updatedAt: Date.now() },
+          { merge: true }
+        );
+        await deleteDoc(doc(firestore, 'banners', bannerId)).catch(() => {});
+      }
+      showToast('🗑 Banner deleted and cleared from website!');
+    } catch (err: any) {
       console.error('Failed to delete banner:', err);
+      showToast('Failed to delete banner: ' + (err?.message || 'Error'));
     }
   };
 
@@ -2012,6 +2105,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     Declined Order
                                   </div>
                                 )}
+
+                                {/* Administrative Action Bar (Cancel / Delete for test or stuck orders) */}
+                                <div className="pt-2 border-t border-[#E8DDCA]/60 flex items-center justify-between gap-1.5">
+                                  {!isCompleted && !isDeclined && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCancelOrder(order.id)}
+                                      className="text-[10px] font-semibold text-[#8F5D2C] hover:text-[#C83A25] hover:bg-[#FFF5F3] px-2 py-0.5 rounded border border-[#E8DDCA] cursor-pointer"
+                                      title="Mark order as Cancelled/Declined"
+                                    >
+                                      ✕ Cancel
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteOrder(order.id)}
+                                    className="text-[10px] font-semibold text-[#C83A25] hover:bg-[#FEE2E2] px-2 py-0.5 rounded border border-red-200 cursor-pointer ml-auto"
+                                    title="Permanently remove order from database"
+                                  >
+                                    🗑 Delete Order
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2712,19 +2827,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
 
-                  {/* Quick Store Hero Banner Canvas Compression & Live Firestore Sync (Task 3) */}
-                  <div className="p-3.5 bg-[#FAF6EE] border border-[#C9A45C]/60 rounded-xl space-y-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <div>
-                        <span className="font-bold text-xs text-[#163E26] flex items-center gap-1.5">
-                          <span>⚡ Quick Hero Banner Upload (Live Cloud Firestore Sync)</span>
-                        </span>
-                        <p className="text-[11px] text-[#77766D] mt-0.5">
-                          Select any mobile camera or desktop image (3MB–8MB). Automatic in-browser Canvas compression resizes to max 1920px (under 300KB) and saves to Firestore.
-                        </p>
-                      </div>
-                      <label className="inline-flex items-center gap-1.5 bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3.5 py-2 rounded-lg cursor-pointer shrink-0 shadow-xs active:scale-98">
-                        <span>{compressingImage ? '⏳ Compressing...' : '📁 Upload Hero Banner'}</span>
+                  {/* Sleek Homepage Hero Banner Upload */}
+                  <div className="p-4 bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div>
+                      <h3 className="font-serif font-bold text-sm text-[#17261D] flex items-center gap-2">
+                        <span>🖼️ Homepage Hero Banner</span>
+                      </h3>
+                      <p className="text-xs text-[#77766D] mt-0.5">
+                        Upload custom edge-to-edge promotional banner for the homepage hero carousel.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="inline-flex items-center gap-2 bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-4 py-2 rounded-xl cursor-pointer shadow-xs transition-all active:scale-98">
+                        {compressingImage ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin text-[#C9A45C]" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Compressing &amp; Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📁 Upload New Banner</span>
+                          </>
+                        )}
                         <input
                           type="file"
                           accept="image/*"
@@ -2733,12 +2860,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           className="hidden"
                         />
                       </label>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!window.confirm('Reset homepage hero banner to default?')) return;
+                          try {
+                            if (firestore) {
+                              await setDoc(doc(firestore, 'settings', 'storeConfig'), { bannerUrl: '', updatedAt: Date.now() }, { merge: true });
+                            }
+                            showToast('Homepage hero banner reset to default.');
+                          } catch (err: any) {
+                            showToast('Failed to reset banner: ' + err.message);
+                          }
+                        }}
+                        className="text-xs font-medium text-[#C83A25] hover:bg-[#FCE8E6] border border-[#C83A25]/30 px-3 py-2 rounded-xl cursor-pointer transition-colors"
+                        title="Reset to default Greenwood hero banner"
+                      >
+                        Reset to Default
+                      </button>
                     </div>
-                    {compressedSizeInfo && (
-                      <p className="text-[11px] text-[#166534] font-medium bg-[#DCFCE7] p-2 rounded-md border border-[#86EFAC]">
-                        {compressedSizeInfo}
-                      </p>
-                    )}
                   </div>
 
                   {/* Banner Aspect Ratio Guidance (Item 17) */}
@@ -2830,9 +2970,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <button
                               type="button"
                               onClick={() => handleDeleteBanner(b.id)}
-                              className="text-[11px] font-semibold text-[#C83A25] hover:text-red-700 px-2 py-1 cursor-pointer"
+                              className="text-[11px] font-semibold text-[#C83A25] hover:bg-[#FEE2E2] px-2.5 py-1 rounded border border-[#C83A25]/30 cursor-pointer flex items-center gap-1 transition-colors"
+                              title="Delete banner permanently"
                             >
-                              Delete
+                              <span>🗑 Delete Banner</span>
                             </button>
                           </div>
                         </div>

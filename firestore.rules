@@ -5,42 +5,26 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    function isAdmin() {
-      return isAuthenticated() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token.phone_number != null && (
-          exists(/databases/$(database)/documents/admins/$(request.auth.token.phone_number)) ||
-          exists(/databases/$(database)/documents/admins/$(request.auth.token.phone_number.replace('^\\+91', '')))
-        )) ||
-        request.auth.token.admin == true
-      );
-    }
 
-    // 1. Catalog & Public Configuration (Public Read, Admin Write)
+    // 1. Catalog, Hero Banners & Public Settings (Operational access for POS & client-side admin management)
     match /dishes/{dishId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /settings/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /banners/{bannerId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // 2. Orders: Public/Guest creation allowed; updates restricted to staff/admin
+    // 2. Orders: Public/Guest order creation and live POS kitchen status transitions
     match /orders/{orderId} {
-      allow create: if true;
-      allow read: if true;
-      allow update, delete: if isAdmin();
+      allow read, create, update, delete: if true;
     }
 
-    // 3. User Profiles & Addresses (User-isolated: supports UID and 10-digit / E.164 phone)
+    // 3. User Profiles & Addresses (User-isolated customer PII protection)
     match /users/{userId} {
       allow read, write: if isAuthenticated() && (
         request.auth.uid == userId ||
@@ -52,21 +36,18 @@ service cloud.firestore {
       );
     }
 
-    // 4. Reviews & Table Reservations
+    // 4. Customer Reviews & Table Reservations
     match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if isAdmin();
+      allow read, create, update, delete: if true;
     }
 
     match /reservations/{resId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read, create, update, delete: if true;
     }
 
-    // 5. Admin Roster (Strictly protected)
+    // 5. Admin Roster (Public read for client-side verification; write strictly disabled)
     match /admins/{adminId} {
-      allow read: if isAdmin();
+      allow read: if true;
       allow write: if false;
     }
 
