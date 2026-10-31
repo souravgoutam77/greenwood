@@ -14,7 +14,7 @@ import { MenuPage } from './components/MenuPage';
 import { CartPage } from './components/CartPage';
 import { ContactModal } from './components/ContactModal';
 import type { PolicyTab } from './components/LegalPolicyModal';
-import { api } from './services/api';
+import { api, computeEffectiveStoreStatus } from './services/api';
 
 // High-Performance Dynamic Code Splitting for Non-Critical & Admin Views
 const ItemDetailPage = React.lazy(() => import('./components/ItemDetailPage').then(m => ({ default: m.ItemDetailPage })));
@@ -49,7 +49,7 @@ export const App: React.FC = () => {
       if (window.location.hash === '#profile') {
         return 'profile';
       }
-      if (window.location.hash === '#admin') {
+      if (window.location.hash.startsWith('#admin') || window.location.hash === '#pending-orders') {
         return 'admin';
       }
       if (window.location.hash === '#about') {
@@ -101,14 +101,14 @@ export const App: React.FC = () => {
   });
   const [mobileTab, setMobileTab] = useState<'home' | 'menu' | 'cart' | 'orders' | 'profile'>('menu');
   const [infoModal, setInfoModal] = useState<{ title: string; message: string } | null>(null);
-  const [isKitchenOpen, setIsKitchenOpen] = useState(true);
+  const [isKitchenOpen, setIsKitchenOpen] = useState<boolean>(() => computeEffectiveStoreStatus());
 
   // Sync kitchen status & operational schedule in real time
   useEffect(() => {
     let isMounted = true;
     api.getSettings().then((s) => {
-      if (s && isMounted && s.is_kitchen_open !== undefined) {
-        setIsKitchenOpen(s.is_kitchen_open);
+      if (s && isMounted) {
+        setIsKitchenOpen(computeEffectiveStoreStatus(s));
       }
     }).catch(() => {});
 
@@ -118,10 +118,7 @@ export const App: React.FC = () => {
       try {
         unsubscribeSettings = onSnapshot(doc(firestore, 'settings', 'config'), (snap) => {
           if (snap.exists() && isMounted) {
-            const data = snap.data();
-            if (data.is_kitchen_open !== undefined) {
-              setIsKitchenOpen(Boolean(data.is_kitchen_open));
-            }
+            setIsKitchenOpen(computeEffectiveStoreStatus(snap.data() as any));
           }
         }, (err) => console.warn('Live settings sync notice in App:', err));
       } catch {}
@@ -129,8 +126,8 @@ export const App: React.FC = () => {
 
     const handleSettingsUpdate = (e: any) => {
       const s = e.detail;
-      if (s && isMounted && s.is_kitchen_open !== undefined) {
-        setIsKitchenOpen(s.is_kitchen_open);
+      if (s && isMounted) {
+        setIsKitchenOpen(computeEffectiveStoreStatus(s));
       }
     };
     window.addEventListener('gw_settings_updated', handleSettingsUpdate);
@@ -159,7 +156,7 @@ export const App: React.FC = () => {
         setCurrentView('orders');
       } else if (window.location.hash === '#profile') {
         setCurrentView('profile');
-      } else if (window.location.hash === '#admin') {
+      } else if (window.location.hash.startsWith('#admin') || window.location.hash === '#pending-orders') {
         setCurrentView('admin');
       } else if (window.location.hash === '#about') {
         setCurrentView('about');
@@ -250,9 +247,9 @@ export const App: React.FC = () => {
       setMobileTab('profile');
       window.location.hash = '#profile';
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else if (href === '#admin') {
+    } else if (href.startsWith('#admin') || href === '#pending-orders') {
       setCurrentView('admin');
-      window.location.hash = '#admin';
+      window.location.hash = href;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (href === '#gallery') {
       setCurrentView('home');

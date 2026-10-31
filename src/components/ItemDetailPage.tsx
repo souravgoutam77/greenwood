@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { LeafBranch, VegBadge } from './Icons';
 import { BUTTER_PANEER_DETAIL } from '../data/dishDetailData';
 import type { DishDetail, PairingItem, RecommendationItem } from '../data/dishDetailData';
 import type { Dish } from '../data/restaurantData';
+import { getCustomerAuth } from '../services/auth';
+import { isFavorite as checkIsFavorite, toggleFavorite as toggleFavoriteService } from '../services/favorites';
 
 interface ItemDetailPageProps {
   onBackToHome: () => void;
@@ -20,7 +22,24 @@ export const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   // Local state
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(() => checkIsFavorite(dish.id));
+
+  useEffect(() => {
+    const handleFavs = () => {
+      setIsFavorite(checkIsFavorite(dish.id));
+    };
+    window.addEventListener('gw_favorites_changed', handleFavs);
+    window.addEventListener('storage', handleFavs);
+    return () => {
+      window.removeEventListener('gw_favorites_changed', handleFavs);
+      window.removeEventListener('storage', handleFavs);
+    };
+  }, [dish.id]);
+
+  const handleToggleFavorite = () => {
+    const auth = getCustomerAuth();
+    toggleFavoriteService(dish.id, auth?.phone);
+  };
   const [addedToast, setAddedToast] = useState<string | null>(null);
   const [helpfulLikes, setHelpfulLikes] = useState<Record<string, number>>({
     'rev-1': 24,
@@ -164,7 +183,7 @@ export const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
           {/* Mobile Top Favorite Icon */}
           <button
             type="button"
-            onClick={() => setIsFavorite(!isFavorite)}
+            onClick={handleToggleFavorite}
             className="md:hidden w-8 h-8 rounded-full bg-[#FFFDF8] border border-[#E8DDCA] flex items-center justify-center text-base hover:bg-black/5 transition-colors focus:outline-none"
             aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
           >
@@ -260,7 +279,7 @@ export const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setIsFavorite(!isFavorite)}
+                  onClick={handleToggleFavorite}
                   className="hidden md:flex w-9 h-9 rounded-full bg-[#FFFDF8] border border-[#E8DDCA] items-center justify-center text-lg shadow-2xs hover:scale-105 transition-all text-[#C83A25] focus:outline-none"
                   aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >

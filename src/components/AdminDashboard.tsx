@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { VegBadge, LeafBranch } from './Icons';
-import { api, ensureFullCatalogue, computeEffectiveStoreStatus, type ApiBanner } from '../services/api';
+import { api, ensureFullCatalogue, computeEffectiveStoreStatus, isLegacyMockDishId, type ApiBanner } from '../services/api';
+import { compressImageToBlob, uploadImageToStorage } from '../services/storageService';
 import { firestore } from '../services/firebase';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
 
@@ -42,10 +43,12 @@ export interface MenuItemData {
 
 interface AdminDashboardProps {
   onNavigateToCustomerSite?: () => void;
+  initialSection?: 'Dashboard' | 'Live Orders' | 'Menu Items' | 'Order History' | 'Settings';
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onNavigateToCustomerSite,
+  initialSection,
 }) => {
   // Admin Security / Login Guard (Authorized Admin Mobile: 8802325537)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
@@ -62,7 +65,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
 
   // Navigation State — strictly the 5 core sections
-  const [activeSection, setActiveSection] = useState<'Dashboard' | 'Live Orders' | 'Menu Items' | 'Order History' | 'Settings'>('Dashboard');
+  const [activeSection, setActiveSection] = useState<'Dashboard' | 'Live Orders' | 'Menu Items' | 'Order History' | 'Settings'>(() => {
+    if (initialSection) return initialSection;
+    if (typeof window !== 'undefined') {
+      const h = window.location.hash.toLowerCase();
+      if (h.includes('orders') || h.includes('pending')) return 'Live Orders';
+      if (h.includes('menu')) return 'Menu Items';
+      if (h.includes('settings')) return 'Settings';
+      if (h.includes('history')) return 'Order History';
+    }
+    return 'Dashboard';
+  });
+
+  // Keep activeSection in sync with browser hash changes
+  useEffect(() => {
+    const handleHash = () => {
+      const h = window.location.hash.toLowerCase();
+      if (h.includes('orders') || h.includes('pending')) setActiveSection('Live Orders');
+      else if (h.includes('menu')) setActiveSection('Menu Items');
+      else if (h.includes('settings')) setActiveSection('Settings');
+      else if (h.includes('history')) setActiveSection('Order History');
+      else if (h === '#admin') setActiveSection('Dashboard');
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
   const [dashboardTimeframe, setDashboardTimeframe] = useState<'Today' | 'This Week' | 'This Month'>('Today');
   
   // Live / Pending Orders Filter & Search
@@ -288,12 +315,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         unsubscribeDishes = onSnapshot(dishesRef, (snapshot) => {
           if (!snapshot.empty) {
             const liveDishes: any[] = [];
-            snapshot.forEach((doc) => liveDishes.push({ id: doc.id, ...doc.data() }));
+            snapshot.forEach((doc) => {
+              const item = { id: doc.id, ...doc.data() };
+              if (!isLegacyMockDishId(item.id)) {
+                liveDishes.push(item);
+              }
+            });
             if (isMounted) {
               // Merge live Firestore updates by ID with existing catalogue so dishes NEVER vanish!
               setMenuItems((prev) => {
                 const liveMap = new Map(liveDishes.map((d) => [d.id, d]));
-                const merged = prev.map((item) => {
+                const merged = prev.filter((item) => !isLegacyMockDishId(item.id)).map((item) => {
                   const update = liveMap.get(item.id);
                   return update ? { ...item, ...update } : item;
                 });
@@ -710,16 +742,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       setCompressingImage(true);
       const originalKb = Math.round(file.size / 1024);
-      const compressed = await compressImageFile(file);
-      const compressedKb = Math.round((compressed.length * 3) / 4 / 1024);
-      setCompressedSizeInfo(`Optimized: ${originalKb} KB → ~${compressedKb} KB (Web Ready)`);
-      if (isEdit) {
-        setEditDishForm((prev) => ({ ...prev, image: compressed }));
-      } else {
-        setNewDishForm((prev) => ({ ...prev, image: compressed }));
+      const blob = await compressImageToBlob(file, 800, 800, 0.85);
+      const compressedKb = Math.round(blob.size / 1024);
+      setCompressedSizeInfo(`Optimizing: ${originalKb} KB → ~${compressedKb} KB (Uploading to Storage...)`);
+
+      let imageUrl = '';
+      try {
+        imageUrl = await uploadImageToStorage(blob, 'dishes', 'dish');
+        setCompressedSizeInfo(`Cloud Ready: ~${compressedKb} KB (Firebase Storage)`);
+      } catch (storageErr) {
+        console.warn('Firebase Storage upload notice, falling back:', storageErr);
+        imageUrl = await compressImageFile(file, 800, 800, 0.75);
       }
+
+      if (isEdit) {
+        setEditDishForm((prev) => ({ ...prev, image: imageUrl }));
+      } else {
+        setNewDishForm((prev) => ({ ...prev, image: imageUrl }));
+      }
+      showToast('Dish photo ready!');
     } catch (err) {
-      console.error('Image compression failed:', err);
+      console.error('Image processing failed:', err);
       showToast('Failed to optimize image. Please try again.');
     } finally {
       setCompressingImage(false);
@@ -732,18 +775,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       setCompressingImage(true);
       const originalKb = Math.round(file.size / 1024);
-      const maxWidth = target === 'desktop' ? 1200 : 800;
-      const maxHeight = target === 'desktop' ? 500 : 600;
-      const compressed = await compressImageFile(file, maxWidth, maxHeight, 0.80);
-      const compressedKb = Math.round((compressed.length * 3) / 4 / 1024);
-      setCompressedSizeInfo(`Banner optimized: ${originalKb} KB → ~${compressedKb} KB`);
-      if (target === 'desktop') {
-        setBannerForm((prev) => ({ ...prev, imageDesktop: compressed }));
-      } else {
-        setBannerForm((prev) => ({ ...prev, imageMobile: compressed }));
+      const maxWidth = target === 'desktop' ? 1400 : 800;
+      const maxHeight = target === 'desktop' ? 600 : 700;
+      const blob = await compressImageToBlob(file, maxWidth, maxHeight, 0.85);
+      const compressedKb = Math.round(blob.size / 1024);
+      setCompressedSizeInfo(`Banner optimizing: ${originalKb} KB → ~${compressedKb} KB (Uploading...)`);
+
+      let bannerUrl = '';
+      try {
+        bannerUrl = await uploadImageToStorage(blob, 'banners', `banner_${target}`);
+        setCompressedSizeInfo(`Cloud Ready: ~${compressedKb} KB (Firebase Storage)`);
+      } catch (storageErr) {
+        console.warn('Firebase Storage upload notice, falling back:', storageErr);
+        bannerUrl = await compressImageFile(file, maxWidth, maxHeight, 0.75);
       }
+
+      if (target === 'desktop') {
+        setBannerForm((prev) => ({ ...prev, imageDesktop: bannerUrl }));
+      } else {
+        setBannerForm((prev) => ({ ...prev, imageMobile: bannerUrl }));
+      }
+      showToast('Banner photo ready!');
     } catch (err) {
-      console.error('Banner compression failed:', err);
+      console.error('Banner processing failed:', err);
       showToast('Failed to optimize banner image.');
     } finally {
       setCompressingImage(false);
@@ -1310,62 +1364,89 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* 4 Core Metric Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {/* Revenue */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
-                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
-                      {dashboardTimeframe} Revenue
-                    </span>
-                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
-                      {dashboardTimeframe === 'Today' ? '₹18,450' : dashboardTimeframe === 'This Week' ? '₹1,24,680' : '₹5,48,920'}
-                    </div>
-                    <span className="inline-flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] font-bold text-[#168039] bg-[#DCE8CB] px-2 py-0.5 rounded-full">
-                      ↑ {dashboardTimeframe === 'Today' ? '14% vs yesterday' : dashboardTimeframe === 'This Week' ? '9.4% vs last week' : '18.2% vs last month'}
-                    </span>
-                  </div>
+                {/* 4 Core Metric Cards (Dynamically computed from actual store orders) */}
+                {(() => {
+                  const now = new Date();
+                  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                  const startOfWeek = startOfToday - 6 * 24 * 60 * 60 * 1000;
+                  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-                  {/* Orders */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
-                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
-                      {dashboardTimeframe} Orders
-                    </span>
-                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
-                      {dashboardTimeframe === 'Today' ? '38' : dashboardTimeframe === 'This Week' ? '264' : '1,142'}
-                    </div>
-                    <div className="flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] text-[#77766D]">
-                      <span className="text-[#168039] font-bold">{dashboardTimeframe === 'Today' ? '34 Delivered' : dashboardTimeframe === 'This Week' ? '248 Delivered' : '1,080 Delivered'}</span>
-                      <span>•</span>
-                      <span>{dashboardTimeframe === 'Today' ? `${newOrdersCount} Live` : '16 Live'}</span>
-                    </div>
-                  </div>
+                  const targetStartTime = dashboardTimeframe === 'Today'
+                    ? startOfToday
+                    : dashboardTimeframe === 'This Week'
+                    ? startOfWeek
+                    : startOfMonth;
 
-                  {/* Average Ticket Size / AOV */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
-                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
-                      Average Order Value (AOV)
-                    </span>
-                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
-                      {dashboardTimeframe === 'Today' ? '₹485' : dashboardTimeframe === 'This Week' ? '₹472' : '₹480'}
-                    </div>
-                    <span className="text-[10px] sm:text-[11px] text-[#77766D] block mt-2">
-                      Healthy Pure Veg basket size
-                    </span>
-                  </div>
+                  const tfOrders = orders.filter((o: any) => {
+                    const ts = o.timestamp || (o.placedTime ? new Date(o.placedTime).getTime() : 0);
+                    return ts >= targetStartTime;
+                  });
 
-                  {/* Fulfillment Performance */}
-                  <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
-                    <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
-                      Kitchen Fulfillment Speed
-                    </span>
-                    <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
-                      {avgKitchenPrepTime}
+                  const completedTf = tfOrders.filter((o) => o.status === 'Completed');
+                  const rev = completedTf.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+                  const totalCount = tfOrders.length;
+                  const deliveredCount = completedTf.length;
+                  const liveCount = tfOrders.filter((o) => o.status === 'New' || o.status === 'Preparing' || o.status === 'Out for Delivery').length;
+                  const aov = deliveredCount > 0 ? Math.round(rev / deliveredCount) : (totalCount > 0 ? Math.round(tfOrders.reduce((s, o) => s + (Number(o.total) || 0), 0) / totalCount) : 0);
+
+                  return (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                      {/* Revenue */}
+                      <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                        <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                          {dashboardTimeframe} Revenue
+                        </span>
+                        <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                          ₹{rev.toLocaleString('en-IN')}
+                        </div>
+                        <span className="inline-flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] font-bold text-[#168039] bg-[#DCE8CB] px-2 py-0.5 rounded-full">
+                          {totalCount > 0 ? `✓ ${deliveredCount} of ${totalCount} settled` : 'Real-time sync'}
+                        </span>
+                      </div>
+
+                      {/* Orders */}
+                      <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                        <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                          {dashboardTimeframe} Orders
+                        </span>
+                        <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                          {totalCount}
+                        </div>
+                        <div className="flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] text-[#77766D]">
+                          <span className="text-[#168039] font-bold">{deliveredCount} Delivered</span>
+                          <span>•</span>
+                          <span>{liveCount} Active Live</span>
+                        </div>
+                      </div>
+
+                      {/* Average Ticket Size / AOV */}
+                      <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                        <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                          Average Order Value (AOV)
+                        </span>
+                        <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                          ₹{aov.toLocaleString('en-IN')}
+                        </div>
+                        <span className="text-[10px] sm:text-[11px] text-[#77766D] block mt-2">
+                          100% Pure Veg basket
+                        </span>
+                      </div>
+
+                      {/* Fulfillment Performance */}
+                      <div className="bg-[#FFFDF8] rounded-xl border border-[#E8DDCA] p-4 shadow-xs">
+                        <span className="text-[11px] sm:text-xs text-[#77766D] font-medium block mb-1">
+                          Kitchen Fulfillment Speed
+                        </span>
+                        <div className="font-sans text-2xl sm:text-3xl font-bold text-[#17261D]">
+                          {avgKitchenPrepTime}
+                        </div>
+                        <span className="text-[10px] sm:text-[11px] text-[#168039] font-bold block mt-2">
+                          Avg prep: {avgKitchenPrepTime}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-[10px] sm:text-[11px] text-[#168039] font-bold block mt-2">
-                      Avg door delivery: 24 mins
-                    </span>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* 2-Column Performance Breakdown */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">

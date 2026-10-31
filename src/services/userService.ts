@@ -19,6 +19,8 @@ export interface UserProfileDocument {
   phone: string;
   name: string;
   email?: string;
+  photoURL?: string;
+  favouriteDishIds?: string[];
   addresses: UserAddress[];
   createdAt: number;
   updatedAt: number;

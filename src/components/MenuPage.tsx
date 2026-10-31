@@ -1,7 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Dish } from '../data/restaurantData';
 import { LeafBranch } from './Icons';
-import { api } from '../services/api';
+import { api, isLegacyMockDishId } from '../services/api';
+import { firestore } from '../services/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { getCustomerAuth } from '../services/auth';
+import { getFavorites, toggleFavorite as toggleFavoriteService, syncFavoritesFromCloud } from '../services/favorites';
 import {
   MENU_CATEGORIES,
   SIGNATURE_TRENDING_DISHES,
@@ -29,57 +33,104 @@ export const MenuPage: React.FC<MenuPageProps> = ({
     setSelectedSubCategory('all');
   }, [activeCategory]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
+    const list = getFavorites();
+    const map: Record<string, boolean> = {};
+    list.forEach((id) => { map[id] = true; });
+    return map;
+  });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [dishStockMap, setDishStockMap] = useState<Record<string, boolean>>({});
   const [trendingDishes, setTrendingDishes] = useState<Dish[]>(SIGNATURE_TRENDING_DISHES);
 
+  // Synchronize and subscribe to favorites updates across components
+  useEffect(() => {
+    syncFavoritesFromCloud().catch(() => {});
+    const handleFavs = () => {
+      const list = getFavorites();
+      const map: Record<string, boolean> = {};
+      list.forEach((id) => { map[id] = true; });
+      setFavorites(map);
+    };
+    window.addEventListener('gw_favorites_changed', handleFavs);
+    window.addEventListener('storage', handleFavs);
+    return () => {
+      window.removeEventListener('gw_favorites_changed', handleFavs);
+      window.removeEventListener('storage', handleFavs);
+    };
+  }, []);
+
+  // Real-time Firestore onSnapshot for dish stock & trending status (no polling!)
   useEffect(() => {
     let isMounted = true;
-    const fetchStock = async () => {
-      try {
-        const dishes = await api.getDishes();
-        if (!isMounted || !dishes) return;
-        const map: Record<string, boolean> = {};
-        dishes.forEach((d) => {
-          if (d.id) map[d.id] = d.inStock;
-          if (d.name) map[d.name.toLowerCase().trim()] = d.inStock;
-        });
-        setDishStockMap(map);
 
-        const trendingOnly = dishes.filter((d) => d.isTrending);
-        if (trendingOnly.length > 0) {
-          setTrendingDishes(
-            trendingOnly.map((d) => ({
-              id: d.id,
-              name: d.name,
-              category: d.category,
-              price: d.price,
-              image: d.image || '/images/dish-detail/rec-dal-makhani.jpg',
-              description: d.description || 'Special signature pure vegetarian preparation.',
-              rating: d.rating || 4.8,
-              reviewsCount: d.reviews_count || 45,
-              isVeg: true,
-            }))
-          );
-        }
-      } catch {
-        // graceful fallback to inStock: true
+    const processDishes = (dishes: any[]) => {
+      if (!isMounted || !dishes) return;
+      const map: Record<string, boolean> = {};
+      dishes.forEach((d) => {
+        if (d.id) map[d.id] = d.inStock !== false;
+        if (d.name) map[d.name.toLowerCase().trim()] = d.inStock !== false;
+      });
+      setDishStockMap(map);
+
+      const trendingOnly = dishes.filter((d) => Boolean(d.isTrending) && !isLegacyMockDishId(d.id));
+      if (trendingOnly.length > 0) {
+        setTrendingDishes(
+          trendingOnly.map((d) => ({
+            id: d.id,
+            name: d.name,
+            category: d.category,
+            price: d.price,
+            image: d.image || '/images/dish-detail/rec-dal-makhani.jpg',
+            description: d.description || 'Special signature pure vegetarian preparation.',
+            rating: d.rating || 4.8,
+            reviewsCount: d.reviews_count || 45,
+            isVeg: true,
+          }))
+        );
       }
     };
-    fetchStock();
-    const interval = setInterval(fetchStock, 15000);
+
+    // Initial cache-first load
+    api.getDishes().then(processDishes).catch(() => {});
+
+    // Live real-time Firestore listener with explicit unsubscribe
+    let unsubscribe: (() => void) | null = null;
+    if (firestore) {
+      try {
+        const dishesRef = collection(firestore, 'dishes');
+        unsubscribe = onSnapshot(
+          dishesRef,
+          (snapshot) => {
+            if (!snapshot.empty && isMounted) {
+              const live: any[] = [];
+              snapshot.forEach((doc) => {
+                const item = { id: doc.id, ...doc.data() };
+                if (!isLegacyMockDishId(item.id)) live.push(item);
+              });
+              processDishes(live);
+            }
+          },
+          (err) => console.warn('[MenuPage] Firestore snapshot notice:', err)
+        );
+      } catch {}
+    }
+
+    const handleDishesChanged = () => {
+      api.getDishes().then(processDishes).catch(() => {});
+    };
+    window.addEventListener('gw_dishes_changed', handleDishesChanged);
+
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener('gw_dishes_changed', handleDishesChanged);
     };
   }, []);
 
   const toggleFavorite = (dishId: string) => {
-    setFavorites((prev) => ({
-      ...prev,
-      [dishId]: !prev[dishId],
-    }));
+    const auth = getCustomerAuth();
+    toggleFavoriteService(dishId, auth?.phone);
   };
 
   const showToast = (dishName: string) => {

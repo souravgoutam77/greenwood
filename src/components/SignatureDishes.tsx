@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { LeafBranch, VegBadge } from './Icons';
 import { RESTAURANT_DATA } from '../data/restaurantData';
 import type { Dish } from '../data/restaurantData';
-import { api, computeEffectiveStoreStatus } from '../services/api';
+import { api, computeEffectiveStoreStatus, isLegacyMockDishId } from '../services/api';
 import { firestore } from '../services/firebase';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { getCustomerAuth } from '../services/auth';
+import { getFavorites, toggleFavorite as toggleFavoriteService } from '../services/favorites';
 
 interface SignatureDishesProps {
   onAddToCart: (dish: Dish) => void;
@@ -16,7 +18,8 @@ interface SignatureDishesProps {
 // STRICTLY show ONLY the dishes that the admin has added to Signature & Trending!
 const formatSignatureDishes = (allDishes: any[]): Dish[] => {
   if (!allDishes || allDishes.length === 0) return [];
-  const inStock = allDishes.filter((d) => Boolean(d.inStock !== false));
+  const cleanDishes = allDishes.filter((d) => !isLegacyMockDishId(d.id));
+  const inStock = cleanDishes.filter((d) => Boolean(d.inStock !== false));
   // Sirf wahi dishes show hongi jisme admin ne Signature & Trending on kiya hai
   const trending = inStock.filter((d) => Boolean(d.isTrending));
 
@@ -43,7 +46,27 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
   onSeeAllClick,
   onDishClick,
 }) => {
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
+    const list = getFavorites();
+    const map: Record<string, boolean> = {};
+    list.forEach((id) => { map[id] = true; });
+    return map;
+  });
+
+  useEffect(() => {
+    const handleFavs = () => {
+      const list = getFavorites();
+      const map: Record<string, boolean> = {};
+      list.forEach((id) => { map[id] = true; });
+      setFavorites(map);
+    };
+    window.addEventListener('gw_favorites_changed', handleFavs);
+    window.addEventListener('storage', handleFavs);
+    return () => {
+      window.removeEventListener('gw_favorites_changed', handleFavs);
+      window.removeEventListener('storage', handleFavs);
+    };
+  }, []);
   const [addedItems, setAddedItems] = useState<Record<string, boolean>>({});
   const [activeSlide, setActiveSlide] = useState(0);
   const [isStoreOpen, setIsStoreOpen] = useState(true);
@@ -274,7 +297,8 @@ export const SignatureDishes: React.FC<SignatureDishesProps> = ({
   };
 
   const toggleFavorite = (id: string) => {
-    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
+    const auth = getCustomerAuth();
+    toggleFavoriteService(id, auth?.phone);
   };
 
   const handleAdd = (dish: Dish) => {

@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { VegBadge } from './Icons';
-import { api } from '../services/api';
-import { isAdminLoggedIn, getCustomerAuth, clearCustomerAuth, type CustomerAuth } from '../services/auth';
+import { api, type ApiProfile } from '../services/api';
+import { isAdminLoggedIn, getCustomerAuth, setCustomerAuth, clearCustomerAuth, type CustomerAuth } from '../services/auth';
 import { AuthModal } from './AuthModal';
+import { getFavoriteDishes, toggleFavorite as toggleFavoriteService } from '../services/favorites';
+import { compressImageToBlob, uploadImageToStorage } from '../services/storageService';
 
 interface Address {
   id: string;
@@ -28,7 +30,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Customer Profile State initialized dynamically
-  const [profile, setProfile] = useState(() => {
+  const [profile, setProfile] = useState<ApiProfile>(() => {
     const auth = getCustomerAuth();
     if (auth && auth.verified) {
       const cleanPhone = (auth.phone || '').replace(/\D/g, '');
@@ -37,14 +39,42 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         name: auth.name,
         phone: masked,
         email: auth.email || '',
+        photoURL: (auth as any).photoURL || '',
       };
     }
     return {
       name: 'Guest Diner',
       phone: 'Not signed in',
       email: '',
+      photoURL: '',
     };
   });
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handleAvatarFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const currentAuth = getCustomerAuth();
+    if (!currentAuth || !currentAuth.verified) {
+      setShowAuthModal(true);
+      return;
+    }
+    const cleanPhone = currentAuth.phone.replace(/\D/g, '').slice(-10);
+    try {
+      setUploadingAvatar(true);
+      const blob = await compressImageToBlob(file, 400, 400, 0.85);
+      const downloadUrl = await uploadImageToStorage(blob, 'profile_photos', cleanPhone);
+      setProfile((prev) => ({ ...prev, photoURL: downloadUrl }));
+      await api.updateProfile({ photoURL: downloadUrl }, cleanPhone);
+      setCustomerAuth({ ...currentAuth, photoURL: downloadUrl } as any);
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   // Saved Addresses State (Clean zero-demo start)
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -305,24 +335,35 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               
               {/* Circular Avatar with Camera Badge */}
               <div className="relative shrink-0">
-                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#B38C4F] text-white flex items-center justify-center font-serif text-3xl sm:text-4xl font-bold ring-2 ring-[#C9A45C] shadow-sm">
-                  {profile.name.charAt(0) || 'R'}
+                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#B38C4F] text-white flex items-center justify-center font-serif text-3xl sm:text-4xl font-bold ring-2 ring-[#C9A45C] shadow-sm overflow-hidden">
+                  {profile.photoURL ? (
+                    <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" />
+                  ) : (
+                    profile.name.charAt(0) || 'G'
+                  )}
                 </div>
+                <input
+                  type="file"
+                  ref={avatarInputRef}
+                  accept="image/*"
+                  onChange={handleAvatarFileSelect}
+                  className="hidden"
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditName(profile.name);
-                    setEditPhone(profile.phone);
-                    setEditEmail(profile.email);
-                    setActiveModal({ type: 'edit-profile', title: 'Edit Profile Information' });
-                  }}
-                  className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#163E26] text-white flex items-center justify-center border-2 border-white shadow-xs hover:bg-[#1E5233] transition-colors"
-                  title="Change avatar photo"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#163E26] text-white flex items-center justify-center border-2 border-white shadow-xs hover:bg-[#1E5233] transition-colors cursor-pointer"
+                  title="Upload profile photo"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <circle cx="12" cy="13" r="3" />
-                  </svg>
+                  {uploadingAvatar ? (
+                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <circle cx="12" cy="13" r="3" />
+                    </svg>
+                  )}
                 </button>
               </div>
 
@@ -1077,40 +1118,106 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
 
             {/* Modal Content: Favorites */}
-            {activeModal.type === 'favorites' && (
-              <div className="my-3 space-y-2.5">
-                <p className="text-xs text-[#77766D]">Your saved pure vegetarian dishes:</p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-2.5 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA]">
-                    <div className="flex items-center gap-2">
-                      <VegBadge />
-                      <span className="font-serif font-medium text-xs text-[#17261D]">Shahi Paneer Butter Masala</span>
+            {activeModal.type === 'favorites' && (() => {
+              const favDishes = getFavoriteDishes(userAuth?.phone);
+              return (
+                <div className="my-3 space-y-3">
+                  {favDishes.length === 0 ? (
+                    <div className="py-6 text-center space-y-2">
+                      <span className="text-3xl">💚</span>
+                      <p className="text-xs font-semibold text-[#17261D]">No Favourites Saved</p>
+                      <p className="text-[11px] text-[#77766D] max-w-xs mx-auto">
+                        Explore our 100% pure vegetarian menu and tap the ❤️ icon on your favourite dishes.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveModal(null);
+                          if (onNavigateToMenu) onNavigateToMenu();
+                          else window.location.hash = '#menu';
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 bg-[#163E26] hover:bg-[#1E5233] text-white px-4 py-2 text-xs font-semibold rounded-xl shadow-xs cursor-pointer"
+                      >
+                        Explore Menu →
+                      </button>
                     </div>
-                    <span className="font-semibold text-xs text-[#C83A25]">₹299</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA]">
-                    <div className="flex items-center gap-2">
-                      <VegBadge />
-                      <span className="font-serif font-medium text-xs text-[#17261D]">Farmhouse Pizza (Fresh Veggies)</span>
-                    </div>
-                    <span className="font-semibold text-xs text-[#C83A25]">₹299</span>
-                  </div>
+                  ) : (
+                    <>
+                      <p className="text-xs text-[#77766D]">
+                        Your saved pure vegetarian dishes ({favDishes.length}):
+                      </p>
+                      <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                        {favDishes.map((dish) => (
+                          <div
+                            key={dish.id}
+                            className="flex items-center justify-between p-2.5 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA] hover:border-[#C9A45C] transition-all"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <img
+                                src={dish.image}
+                                alt={dish.name}
+                                className="w-11 h-11 rounded-lg object-cover border border-[#E8DDCA] shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1">
+                                  <VegBadge />
+                                  <span className="font-serif font-semibold text-xs text-[#17261D] truncate">
+                                    {dish.name}
+                                  </span>
+                                </div>
+                                <span className="font-semibold text-xs text-[#C83A25] block">
+                                  ₹{dish.price}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  toggleFavoriteService(dish.id, userAuth?.phone);
+                                  // Force re-render of modal
+                                  setProfile((p) => ({ ...p }));
+                                }}
+                                className="p-1.5 text-[#C83A25] hover:bg-black/5 rounded-lg cursor-pointer"
+                                title="Remove from favourites"
+                              >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveModal(null);
+                                  if (onNavigateToMenu) onNavigateToMenu();
+                                  else window.location.hash = '#menu';
+                                }}
+                                className="bg-[#163E26] hover:bg-[#1E5233] text-white text-[11px] font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs cursor-pointer"
+                              >
+                                Order
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveModal(null);
+                            if (onNavigateToMenu) onNavigateToMenu();
+                            else window.location.hash = '#menu';
+                          }}
+                          className="bg-[#163E26] text-white px-4 py-2 text-xs font-semibold rounded-lg shadow-xs cursor-pointer hover:bg-[#1E5233]"
+                        >
+                          View Full Menu
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div className="pt-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveModal(null);
-                      if (onNavigateToMenu) onNavigateToMenu();
-                      else window.location.hash = '#menu';
-                    }}
-                    className="bg-[#163E26] text-white px-4 py-2 text-xs font-semibold rounded-lg shadow-xs"
-                  >
-                    Order from Menu
-                  </button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
 
             {/* Modal Content: Support */}

@@ -109,6 +109,8 @@ service cloud.firestore {
     //      - phone: string (required, 10 digits)
     //      - name: string (required, 1-100 chars)
     //      - email: string (optional, 0-150 chars)
+    //      - photoURL: string (optional, 0-200000 chars, URL or Base64 data URL)
+    //      - favouriteDishIds: list of strings (optional, up to 100 entries, each 1-100 chars)
     //      - addresses: list of maps (required, 0-20 entries)
     //          Each address map:
     //            - id: string (required, 1-60 chars)
@@ -350,13 +352,34 @@ service cloud.firestore {
         isValidOptionalString(addr, 'pincode', 0, 10);
     }
 
+    function isValidDishId(val) {
+      return val is string && val.size() >= 1 && val.size() <= 100;
+    }
+
     function isValidUser(data) {
       return hasRequiredFields(data, ['phone', 'name', 'addresses', 'createdAt', 'updatedAt']) &&
-        hasOnlyAllowedFields(data, ['phone', 'name', 'email', 'addresses', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(data, ['phone', 'name', 'email', 'photoURL', 'favouriteDishIds', 'addresses', 'createdAt', 'updatedAt']) &&
         isValidString(data.phone, 10, 10) &&
         data.phone.matches('^[0-9]{10}$') &&
         isValidString(data.name, 1, 100) &&
         isValidOptionalString(data, 'email', 0, 150) &&
+        isValidOptionalString(data, 'photoURL', 0, 200000) &&
+        (!('favouriteDishIds' in data) || (
+          data.favouriteDishIds is list &&
+          data.favouriteDishIds.size() <= 100 &&
+          data.favouriteDishIds.join('').size() <= 10000 &&
+          data.favouriteDishIds.join('').size() >= data.favouriteDishIds.size() &&
+          (data.favouriteDishIds.size() == 0 || isValidDishId(data.favouriteDishIds[0])) &&
+          (data.favouriteDishIds.size() <= 1 || isValidDishId(data.favouriteDishIds[1])) &&
+          (data.favouriteDishIds.size() <= 2 || isValidDishId(data.favouriteDishIds[2])) &&
+          (data.favouriteDishIds.size() <= 3 || isValidDishId(data.favouriteDishIds[3])) &&
+          (data.favouriteDishIds.size() <= 4 || isValidDishId(data.favouriteDishIds[4])) &&
+          (data.favouriteDishIds.size() <= 5 || isValidDishId(data.favouriteDishIds[5])) &&
+          (data.favouriteDishIds.size() <= 6 || isValidDishId(data.favouriteDishIds[6])) &&
+          (data.favouriteDishIds.size() <= 7 || isValidDishId(data.favouriteDishIds[7])) &&
+          (data.favouriteDishIds.size() <= 8 || isValidDishId(data.favouriteDishIds[8])) &&
+          (data.favouriteDishIds.size() <= 9 || isValidDishId(data.favouriteDishIds[9]))
+        )) &&
         data.addresses is list &&
         data.addresses.size() <= 20 &&
         (data.addresses.size() == 0 || isValidAddress(data.addresses[0])) &&

@@ -120,6 +120,7 @@ export interface ApiProfile {
   phone: string;
   email: string;
   membership?: string;
+  photoURL?: string;
 }
 
 // -------------------------------------------------------------------
@@ -182,15 +183,19 @@ const DEFAULT_DISHES: ApiDish[] = SEARCHABLE_MENU.map((i) => ({
   reviews_count: i.reviewsCount || 45,
 }));
 
+export const isLegacyMockDishId = (id: string): boolean => /^dish-(?:[1-9]|1[0-8])$/.test(id);
+
 export function ensureFullCatalogue(dishesList: ApiDish[]): ApiDish[] {
   if (!dishesList || dishesList.length === 0) return DEFAULT_DISHES;
-  const existingMap = new Map(dishesList.map((d) => [d.id, d]));
+  // Strictly filter out any legacy mock dishes (dish-1 to dish-18)
+  const cleanList = dishesList.filter((d) => !isLegacyMockDishId(d.id));
+  const existingMap = new Map(cleanList.map((d) => [d.id, d]));
   const full = DEFAULT_DISHES.map((def) => {
     const existing = existingMap.get(def.id);
     return existing ? { ...def, ...existing } : def;
   });
-  // Also preserve custom dishes added by admin
-  dishesList.forEach((dish) => {
+  // Also preserve custom dishes added by admin (excluding legacy mock IDs)
+  cleanList.forEach((dish) => {
     if (!DEFAULT_DISHES.some((d) => d.id === dish.id)) {
       full.push(dish);
     }
@@ -384,10 +389,18 @@ export const api = {
     const cached = ensureFullCatalogue(getStorageItem<ApiDish[]>('dishes', DEFAULT_DISHES));
     if (firestore) {
       try {
-        const snap = await withTimeout(getDocs(collection(firestore, 'dishes')), 1200);
+        const snap = await withTimeout(getDocs(collection(firestore, 'dishes')), 1500);
         if (!snap.empty) {
           const cloudDishes: ApiDish[] = [];
-          snap.forEach((d) => cloudDishes.push(d.data() as ApiDish));
+          snap.forEach((d) => {
+            const item = d.data() as ApiDish;
+            if (isLegacyMockDishId(item.id)) {
+              // Automatically delete legacy mock dishes from Firestore to prevent count mismatch
+              if (firestore) deleteDoc(doc(firestore, 'dishes', item.id)).catch(() => {});
+            } else {
+              cloudDishes.push(item);
+            }
+          });
           const cloudMap = new Map(cloudDishes.map((d) => [d.id, d]));
           const mergedList = cached.map((d) => {
             const upd = cloudMap.get(d.id);
@@ -777,6 +790,7 @@ export const api = {
       name: userDoc.name,
       phone: `+91 ${clean.slice(0, 5)} XXXXX`,
       email: userDoc.email || '',
+      photoURL: userDoc.photoURL,
     };
   },
 
@@ -786,6 +800,7 @@ export const api = {
     const userDoc = await userService.updateUserProfile(clean, {
       name: profile.name,
       email: profile.email,
+      photoURL: profile.photoURL,
     });
     return {
       success: true,
@@ -793,6 +808,7 @@ export const api = {
         name: userDoc.name,
         phone: `+91 ${clean.slice(0, 5)} XXXXX`,
         email: userDoc.email || '',
+        photoURL: userDoc.photoURL,
       },
     };
   },
