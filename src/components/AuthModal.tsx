@@ -143,9 +143,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // WhatsApp verification link
   const openWhatsAppOtp = () => {
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-    const codeToSend = confirmationResult ? 'SMS OTP' : generatedOtp;
+    const codeToSend = generatedOtp || Math.floor(100000 + Math.random() * 900000).toString();
+    if (!generatedOtp) setGeneratedOtp(codeToSend);
     const msg = encodeURIComponent(
-      `Hello Greenwood Café! My phone number is +91 ${cleanPhone} for login verification. Code: ${codeToSend}`
+      `Hello Greenwood Café! My phone number is +91 ${cleanPhone}. My login verification OTP is: ${codeToSend}`
     );
     window.open(`https://wa.me/91${PRIMARY_ADMIN_PHONE}?text=${msg}`, '_blank');
   };
@@ -214,8 +215,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         verified = true;
       } catch (err: any) {
         console.warn('[Firebase Auth] Code verification notice:', err);
-        // Owner test fallback
-        if (cleanPhone === PRIMARY_ADMIN_PHONE && (code === '123456' || code === '880232')) {
+        // If carrier SMS is delayed, also check if user entered the WhatsApp OTP code
+        if (generatedOtp && code === generatedOtp) {
           verified = true;
         } else {
           setError('Invalid verification code from SMS. Please check your SMS and enter the 6-digit code.');
@@ -461,11 +462,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <p className="text-[11px] text-[#14532D] mt-1">
                       Google SMS service has sent a 6-digit code to your phone. Check your Messages app.
                     </p>
-                    {phone.replace(/\D/g, '').slice(-10) === PRIMARY_ADMIN_PHONE && (
-                      <p className="text-[11px] text-[#8F5D2C] font-semibold mt-1 bg-[#FAF6EE] py-1 px-2 rounded border border-[#E8DDCA]">
-                        Owner PIN: <strong>123456</strong> (or enter real SMS code)
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-2">
