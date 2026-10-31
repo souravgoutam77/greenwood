@@ -113,6 +113,11 @@ export interface ApiAddress {
   addressLine: string;
   phone: string;
   isDefault: boolean;
+  flatHouse?: string;
+  streetArea?: string;
+  landmark?: string;
+  city?: string;
+  pincode?: string;
 }
 
 export interface ApiProfile {

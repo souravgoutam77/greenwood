@@ -102,6 +102,18 @@ export const CartPage: React.FC<CartPageProps> = ({
       setAuth(currentAuth);
       setCustomerName(currentAuth.name);
       setCustomerPhone(currentAuth.phone);
+      api.getAddresses(currentAuth.phone).then((addrs) => {
+        if (addrs && addrs.length > 0) {
+          const def = addrs.find((a: any) => a.isDefault) || addrs[0];
+          if (def) {
+            if (def.addressLine) setCustomerAddress(def.addressLine);
+            if (def.flatHouse) setAddrHouse(def.flatHouse);
+            if (def.streetArea) setAddrArea(def.streetArea);
+            if (def.landmark) setAddrLandmark(def.landmark);
+            if (def.pincode) setAddrPincode(def.pincode);
+          }
+        }
+      }).catch(() => {});
     }
 
     const handleAuthChange = (e: any) => {
@@ -110,6 +122,18 @@ export const CartPage: React.FC<CartPageProps> = ({
       if (user && user.verified) {
         setCustomerName(user.name);
         setCustomerPhone(user.phone);
+        api.getAddresses(user.phone).then((addrs) => {
+          if (addrs && addrs.length > 0) {
+            const def = addrs.find((a: any) => a.isDefault) || addrs[0];
+            if (def) {
+              if (def.addressLine) setCustomerAddress(def.addressLine);
+              if (def.flatHouse) setAddrHouse(def.flatHouse);
+              if (def.streetArea) setAddrArea(def.streetArea);
+              if (def.landmark) setAddrLandmark(def.landmark);
+              if (def.pincode) setAddrPincode(def.pincode);
+            }
+          }
+        }).catch(() => {});
       }
     };
 
@@ -899,8 +923,14 @@ _Please confirm kitchen acceptance and live preparation status!_`;
           setShowAuthModal(false);
           submitVerifiedOrder(user);
         }}
-        initialName={customerName}
         initialPhone={customerPhone}
+        initialName={customerName}
+        initialAddress={{
+          house: addrHouse,
+          area: addrArea,
+          landmark: addrLandmark,
+          pincode: addrPincode,
+        }}
       />
 
       {/* Success Modal / Toast */}

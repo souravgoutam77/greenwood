@@ -1279,7 +1279,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             phone: masked,
             email: freshAuth.email || '',
           });
-          showToast(`Welcome, ${freshAuth.name}! Logged in successfully.`);
+          showToast(`Welcome back, ${freshAuth.name}! Logged in successfully.`);
         }}
       />
     </div>
