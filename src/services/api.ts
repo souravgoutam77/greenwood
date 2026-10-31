@@ -655,22 +655,38 @@ export const api = {
       timestamp: Date.now(),
     };
 
+    // 1. Write directly to Cloud Firestore as the authoritative persistence engine
+    if (!firestore) {
+      throw new Error('Database is not initialized. Please check your internet connection.');
+    }
+
+    const orderPayload = {
+      ...newOrder,
+      orderId: newId,
+      customerId: cleanPhone || 'guest',
+      customerName: payload.customerName || 'Customer',
+      customerPhone: cleanPhone || '9876543210',
+      deliveryAddress: payload.customerAddress || 'Narela Hub, Delhi - 110040',
+      pricing: { subtotal, deliveryFee, total },
+      status: 'New',
+      createdAt: Date.now(),
+      timestamp: Date.now(),
+    };
+
+    // FORCE CLOUD FIRESTORE ON ORDER PLACEMENT (PHONE -> DATABASE)
+    // We strictly await the real cloud write so network or permission failures are never hidden!
+    await setDoc(doc(firestore, 'orders', newId), cleanFirestoreData(orderPayload));
+
+    // 2. Update local state and caches ONLY after cloud write succeeds
     const updatedList = [newOrder, ...currentOrders];
     setStorageItem(storageKey, updatedList, true);
 
-    // Also update admin orders list cache if present
     try {
       const adminList = getStorageItem<ApiOrder[]>('orders_admin', []);
       setStorageItem('orders_admin', [newOrder, ...adminList], false);
     } catch {}
 
     broadcastCustomEvent('gw_orders_changed', newOrder);
-
-    if (firestore) {
-      setDoc(doc(firestore, 'orders', newId), cleanFirestoreData(newOrder)).catch((err) => {
-        console.warn('Firestore createOrder notice:', err);
-      });
-    }
 
     return { success: true, order: newOrder };
   },
@@ -720,9 +736,11 @@ export const api = {
     broadcastCustomEvent('gw_orders_changed', updatedOrder);
 
     if (firestore && updatedOrder) {
-      setDoc(doc(firestore, 'orders', orderId), cleanFirestoreData(updatedOrder), { merge: true }).catch((err) => {
-        console.warn('Firestore updateOrderStatus notice:', err);
-      });
+      try {
+        await setDoc(doc(firestore, 'orders', orderId), cleanFirestoreData(updatedOrder), { merge: true });
+      } catch (err) {
+        console.warn('Firestore updateOrderStatus error:', err);
+      }
     }
 
     return { success: true, order: updatedOrder || (adminOrders[0] as ApiOrder) };
@@ -767,21 +785,23 @@ export const api = {
     broadcastCustomEvent('gw_orders_changed', updatedOrder);
 
     if (firestore && updatedOrder) {
-      setDoc(doc(firestore, 'orders', orderId), cleanFirestoreData(updatedOrder), { merge: true }).catch((err) => {
-        console.warn('Firestore submitOrderReview notice:', err);
-      });
-      // Also add to public reviews collection
-      const safeReviewId = `rev-${orderId.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`;
-      setDoc(doc(firestore, 'reviews', safeReviewId), {
-        id: safeReviewId,
-        orderId,
-        customerName: (updatedOrder as any).customerName || 'Greenwood Guest',
-        customerPhone: phone || '',
-        rating,
-        reviewText,
-        reviewPhoto,
-        createdAt: Date.now(),
-      }).catch((err) => console.warn('Firestore review set notice:', err));
+      try {
+        await setDoc(doc(firestore, 'orders', orderId), cleanFirestoreData(updatedOrder), { merge: true });
+        // Also add to public reviews collection
+        const safeReviewId = `rev-${orderId.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`;
+        await setDoc(doc(firestore, 'reviews', safeReviewId), {
+          id: safeReviewId,
+          orderId,
+          customerName: (updatedOrder as any).customerName || 'Greenwood Guest',
+          customerPhone: phone || '',
+          rating,
+          reviewText,
+          reviewPhoto,
+          createdAt: Date.now(),
+        });
+      } catch (err) {
+        console.warn('Firestore submitOrderReview error:', err);
+      }
     }
 
     return { success: true };

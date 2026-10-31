@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api, type ApiBanner } from '../services/api';
+import { firestore } from '../services/firebase';
+import { doc, onSnapshot, collection } from 'firebase/firestore';
 
 const FALLBACK_BANNERS: ApiBanner[] = [
   {
@@ -42,9 +44,11 @@ export const HeroBanner: React.FC = () => {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
-  // Fetch banners from API / DB once on mount
+  // Fetch banners from API / DB and subscribe to real-time updates
   useEffect(() => {
     let isMounted = true;
+
+    // 1. Initial load from API / Local Cache
     api
       .getBanners()
       .then((data) => {
@@ -57,8 +61,65 @@ export const HeroBanner: React.FC = () => {
       })
       .catch(() => {});
 
+    // 2. Real-time Cloud Firestore Listeners for Instant Multi-Device Sync
+    let unsubscribeStoreConfig: (() => void) | null = null;
+    let unsubscribeBanners: (() => void) | null = null;
+
+    if (firestore) {
+      try {
+        // Listener A: Store Settings Config bannerUrl (updated via fast canvas compression)
+        const configRef = doc(firestore, 'settings', 'storeConfig');
+        unsubscribeStoreConfig = onSnapshot(
+          configRef,
+          (snapshot) => {
+            if (snapshot.exists() && isMounted) {
+              const data = snapshot.data();
+              if (data?.bannerUrl) {
+                setBanners((prev) => {
+                  const updated = [...prev];
+                  if (updated.length > 0) {
+                    updated[0] = {
+                      ...updated[0],
+                      imageDesktop: data.bannerUrl,
+                      imageMobile: data.bannerUrl,
+                    };
+                  }
+                  return updated;
+                });
+              }
+            }
+          },
+          (err) => console.warn('[HeroBanner] storeConfig sync notice:', err)
+        );
+
+        // Listener B: Banners collection
+        const bannersCollectionRef = collection(firestore, 'banners');
+        unsubscribeBanners = onSnapshot(
+          bannersCollectionRef,
+          (snapshot) => {
+            if (!snapshot.empty && isMounted) {
+              const liveBanners: ApiBanner[] = [];
+              snapshot.forEach((doc) => {
+                liveBanners.push({ id: doc.id, ...(doc.data() as any) });
+              });
+              const active = liveBanners.filter((b) => b.isActive !== false);
+              if (active.length > 0) {
+                active.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+                setBanners(active);
+              }
+            }
+          },
+          (err) => console.warn('[HeroBanner] banners collection sync notice:', err)
+        );
+      } catch (err) {
+        console.warn('[HeroBanner] Firestore listener init notice:', err);
+      }
+    }
+
     return () => {
       isMounted = false;
+      if (unsubscribeStoreConfig) unsubscribeStoreConfig();
+      if (unsubscribeBanners) unsubscribeBanners();
     };
   }, []);
 

@@ -171,7 +171,7 @@ export const CartPage: React.FC<CartPageProps> = ({
     let assignedId = `#GW-${Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
-      // 1. Persist real order to Backend Database
+      // 1. Force Cloud Firestore on Order Placement (Phone -> Database)
       const res = await api.createOrder({
         customerName: effectiveName,
         customerPhone: effectivePhone,
@@ -191,13 +191,12 @@ export const CartPage: React.FC<CartPageProps> = ({
       if (res && res.order) {
         assignedId = res.order.id;
       }
-    } catch (err: any) {
-      console.warn('Backend order persistence note:', err);
-      if (err.message && err.message.includes('closed')) {
-        setValidationError(err.message);
-        setIsSubmitting(false);
-        return;
-      }
+    } catch (error: any) {
+      console.error('[Order Placement Error]', error);
+      alert('Order failed to reach server: ' + (error?.message || 'Network error occurred'));
+      setValidationError(error?.message || 'Order failed to reach server. Please try again.');
+      setIsSubmitting(false);
+      return;
     } finally {
       setIsSubmitting(false);
     }

@@ -1,9 +1,75 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { VegBadge, LeafBranch } from './Icons';
 import { api, ensureFullCatalogue, computeEffectiveStoreStatus, isLegacyMockDishId, type ApiBanner } from '../services/api';
 import { compressImageToBlob, uploadImageToStorage } from '../services/storageService';
 import { firestore } from '../services/firebase';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+
+// Web Audio API POS notification chime synthesizer (D5 - A5 - D6 chord)
+function playOrderChime() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const playTone = (freq: number, start: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + duration);
+    };
+    playTone(587.33, 0, 0.4); // D5
+    playTone(880.0, 0.15, 0.6); // A5
+    playTone(1174.66, 0.3, 0.8); // D6
+  } catch (e) {
+    console.warn('[Admin POS] Audio chime notice:', e);
+  }
+}
+
+// Client-side Canvas compression (< 300KB)
+async function compressImageForBanner(file: File, maxWidth = 1920, quality = 0.70): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Failed to parse image file'));
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas 2D context unavailable'));
+        ctx.drawImage(img, 0, 0, width, height);
+
+        let q = quality;
+        let dataUrl = canvas.toDataURL('image/jpeg', q);
+        // Ensure strictly under 300KB (max 400,000 base64 characters)
+        while (dataUrl.length > 400000 && q > 0.3) {
+          q -= 0.1;
+          dataUrl = canvas.toDataURL('image/jpeg', q);
+        }
+        resolve(dataUrl);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export interface AdminOrderItem {
   name: string;
@@ -237,6 +303,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   });
 
+  // Tracking refs for real-time order arrival sound alerts
+  const hasLoadedOrdersRef = useRef(false);
+  const prevOrdersIdsRef = useRef<Set<string>>(new Set());
+
   // Menu Items State (100% Pure Veg) initialized synchronously from cache
   const [menuItems, setMenuItems] = useState<MenuItemData[]>(() => ensureFullCatalogue(api.getDishesSync()) as any);
   const [syncingDishIds, setSyncingDishIds] = useState<Record<string, boolean>>({});
@@ -302,14 +372,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }
         }, (err) => console.warn('[Admin POS] Firestore settings sync notice:', err));
 
+        // ADMIN POS LIVE LISTENER (DATABASE -> ADMIN PC)
         const ordersRef = collection(firestore, 'orders');
-        unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
-          if (!snapshot.empty) {
-            const live: any[] = [];
-            snapshot.forEach((doc) => live.push({ id: doc.id, ...doc.data() }));
-            if (isMounted) setOrders(live);
+        unsubscribeOrders = onSnapshot(
+          ordersRef,
+          (snapshot) => {
+            const liveOrders: any[] = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            liveOrders.sort((a, b) => (b.createdAt || b.timestamp || 0) - (a.createdAt || a.timestamp || 0));
+
+            if (isMounted) {
+              if (hasLoadedOrdersRef.current) {
+                const prevIds = prevOrdersIdsRef.current;
+                const hasNewOrder = liveOrders.some((o) => o.status === 'New' && !prevIds.has(o.id));
+                if (hasNewOrder) {
+                  playOrderChime();
+                  showToast('🔔 New Live Order Received!');
+                }
+              } else {
+                hasLoadedOrdersRef.current = true;
+              }
+              prevOrdersIdsRef.current = new Set(liveOrders.map((o) => o.id));
+              setOrders(liveOrders);
+            }
+          },
+          (error) => {
+            console.error('POS Listener Error:', error);
+            alert('Failed to listen for live orders: ' + error.message);
           }
-        }, (err) => console.warn('[Admin POS] Firestore orders sync notice:', err));
+        );
 
         const dishesRef = collection(firestore, 'dishes');
         unsubscribeDishes = onSnapshot(dishesRef, (snapshot) => {
@@ -769,38 +859,78 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  // FIX HERO BANNER UPLOAD (CLIENT-SIDE CANVAS COMPRESSION)
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'desktop' | 'mobile') => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       setCompressingImage(true);
       const originalKb = Math.round(file.size / 1024);
-      const maxWidth = target === 'desktop' ? 1400 : 800;
-      const maxHeight = target === 'desktop' ? 600 : 700;
-      const blob = await compressImageToBlob(file, maxWidth, maxHeight, 0.85);
-      const compressedKb = Math.round(blob.size / 1024);
-      setCompressedSizeInfo(`Banner optimizing: ${originalKb} KB → ~${compressedKb} KB (Uploading...)`);
+      const maxWidth = target === 'desktop' ? 1920 : 800;
+      setCompressedSizeInfo(`Optimizing banner: ${originalKb} KB → < 300 KB...`);
 
-      let bannerUrl = '';
-      try {
-        bannerUrl = await uploadImageToStorage(blob, 'banners', `banner_${target}`);
-        setCompressedSizeInfo(`Cloud Ready: ~${compressedKb} KB (Firebase Storage)`);
-      } catch (storageErr) {
-        console.warn('Firebase Storage upload notice, falling back:', storageErr);
-        bannerUrl = await compressImageFile(file, maxWidth, maxHeight, 0.75);
-      }
+      const compressedBase64 = await compressImageForBanner(file, maxWidth, 0.70);
+      const compressedKb = Math.round((compressedBase64.length * 0.75) / 1024);
+      setCompressedSizeInfo(`Canvas Compressed: ${compressedKb} KB`);
 
       if (target === 'desktop') {
-        setBannerForm((prev) => ({ ...prev, imageDesktop: bannerUrl }));
+        setBannerForm((prev) => ({ ...prev, imageDesktop: compressedBase64 }));
       } else {
-        setBannerForm((prev) => ({ ...prev, imageMobile: bannerUrl }));
+        setBannerForm((prev) => ({ ...prev, imageMobile: compressedBase64 }));
       }
       showToast('Banner photo ready!');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Banner processing failed:', err);
+      alert('Banner upload failed: ' + (err?.message || 'Unknown error'));
       showToast('Failed to optimize banner image.');
     } finally {
       setCompressingImage(false);
+    }
+  };
+
+  // Quick Store Hero Banner Canvas Compression & Direct Firestore Upload (Task 3)
+  const handleQuickStoreBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setCompressingImage(true);
+      setCompressedSizeInfo('Compressing banner image (< 300KB)...');
+
+      // 1. In-browser Canvas compression: max width 1920px, JPEG 0.70, < 300KB
+      const compressedBase64 = await compressImageForBanner(file, 1920, 0.70);
+      const sizeKb = Math.round((compressedBase64.length * 0.75) / 1024);
+      setCompressedSizeInfo(`Compressed: ${sizeKb} KB. Uploading to Firestore...`);
+
+      // 2. Save directly to doc(db, 'settings', 'storeConfig') under field bannerUrl
+      if (firestore) {
+        await setDoc(doc(firestore, 'settings', 'storeConfig'), {
+          bannerUrl: compressedBase64,
+          updatedAt: Date.now(),
+        }, { merge: true });
+
+        // Also synchronize primary banner in banners collection
+        await setDoc(doc(firestore, 'banners', 'banner-1'), {
+          id: 'banner-1',
+          title: 'Good Food. Greener Moods.',
+          subtitle: '100% Pure Vegetarian Fine Dining in Narela',
+          imageDesktop: compressedBase64,
+          imageMobile: compressedBase64,
+          linkUrl: '#menu',
+          isActive: true,
+          displayOrder: 1,
+        }, { merge: true });
+      }
+
+      alert('Banner updated successfully!');
+      showToast('Banner updated successfully!');
+    } catch (error: any) {
+      console.error('Banner upload error:', error);
+      alert('Banner upload failed: ' + (error?.message || 'Unknown error'));
+      showToast('Banner upload failed: ' + (error?.message || 'Unknown error'));
+    } finally {
+      setCompressingImage(false);
+      setCompressedSizeInfo(null);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -885,19 +1015,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       );
       try {
         await api.updateBanner(bannerId, bannerForm);
+        if (firestore && (bannerForm.imageDesktop || bannerForm.imageMobile)) {
+          const img = bannerForm.imageDesktop || bannerForm.imageMobile;
+          await setDoc(
+            doc(firestore, 'settings', 'storeConfig'),
+            { bannerUrl: img, updatedAt: Date.now() },
+            { merge: true }
+          );
+        }
+        alert('Banner updated successfully!');
         showToast('Banner updated successfully!');
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to update banner:', err);
+        alert('Banner upload failed: ' + (err?.message || 'Unknown error'));
       }
     } else {
       try {
         const res = await api.addBanner(bannerForm);
         if (res.banner) {
           setBanners((prev) => [...prev, res.banner]);
+          if (firestore && (bannerForm.imageDesktop || bannerForm.imageMobile)) {
+            const img = bannerForm.imageDesktop || bannerForm.imageMobile;
+            await setDoc(
+              doc(firestore, 'settings', 'storeConfig'),
+              { bannerUrl: img, updatedAt: Date.now() },
+              { merge: true }
+            );
+          }
+          alert('Banner updated successfully!');
           showToast('New homepage banner added!');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to create banner:', err);
+        alert('Banner upload failed: ' + (err?.message || 'Unknown error'));
       }
     }
     setActiveModal(null);
@@ -2560,6 +2710,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     >
                       <span>+ Add Banner</span>
                     </button>
+                  </div>
+
+                  {/* Quick Store Hero Banner Canvas Compression & Live Firestore Sync (Task 3) */}
+                  <div className="p-3.5 bg-[#FAF6EE] border border-[#C9A45C]/60 rounded-xl space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div>
+                        <span className="font-bold text-xs text-[#163E26] flex items-center gap-1.5">
+                          <span>⚡ Quick Hero Banner Upload (Live Cloud Firestore Sync)</span>
+                        </span>
+                        <p className="text-[11px] text-[#77766D] mt-0.5">
+                          Select any mobile camera or desktop image (3MB–8MB). Automatic in-browser Canvas compression resizes to max 1920px (under 300KB) and saves to Firestore.
+                        </p>
+                      </div>
+                      <label className="inline-flex items-center gap-1.5 bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-3.5 py-2 rounded-lg cursor-pointer shrink-0 shadow-xs active:scale-98">
+                        <span>{compressingImage ? '⏳ Compressing...' : '📁 Upload Hero Banner'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={compressingImage}
+                          onChange={handleQuickStoreBannerUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {compressedSizeInfo && (
+                      <p className="text-[11px] text-[#166534] font-medium bg-[#DCFCE7] p-2 rounded-md border border-[#86EFAC]">
+                        {compressedSizeInfo}
+                      </p>
+                    )}
                   </div>
 
                   {/* Banner Aspect Ratio Guidance (Item 17) */}
