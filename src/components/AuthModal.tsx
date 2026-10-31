@@ -24,9 +24,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
-  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
-  const [otpBanner, setOtpBanner] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -74,7 +71,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Generate real 6-digit OTP and send via Firebase or SMS simulation
+  // Real Firebase Phone Auth SMS Dispatch
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError(null);
@@ -94,61 +91,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setOtp(['', '', '', '', '', '']);
 
-    // Generate real secure 6-digit OTP code
-    const secureCode = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(secureCode);
-
-    let sentViaFirebase = false;
-
-    // Try real Firebase Phone Auth now that Phone is enabled
     try {
-      if (auth) {
-        const appVerifier = setupRecaptcha();
-        if (appVerifier) {
-          const e164Phone = `+91${cleanPhone}`;
-          const confirmation = await signInWithPhoneNumber(auth, e164Phone, appVerifier);
-          setConfirmationResult(confirmation);
-          sentViaFirebase = true;
-          setOtpBanner(`Real SMS OTP sent to +91 ${cleanPhone}`);
-        }
+      if (!auth) {
+        throw new Error('Authentication service is temporarily unavailable. Please sign in with Google.');
       }
+      const appVerifier = setupRecaptcha();
+      if (!appVerifier) {
+        throw new Error('Security verification service could not be initialized. Please refresh and try again.');
+      }
+      const e164Phone = `+91${cleanPhone}`;
+      const confirmation = await signInWithPhoneNumber(auth, e164Phone, appVerifier);
+      setConfirmationResult(confirmation);
+      setLoading(false);
+      setStep('otp');
+      setResendTimer(30);
+
+      // Auto-focus first OTP box after state transition
+      setTimeout(() => {
+        document.getElementById('otp-0')?.focus();
+      }, 150);
     } catch (firebaseErr: any) {
-      console.warn('[Firebase Auth] Phone Auth attempt notice:', firebaseErr);
+      console.error('[Firebase Auth] Phone Auth error:', firebaseErr);
+      setLoading(false);
+      const code = firebaseErr?.code || '';
+      if (code === 'auth/invalid-phone-number') {
+        setError('Invalid phone number format. Please enter a valid 10-digit Indian mobile number.');
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many SMS requests in a short time. Please wait a few minutes or sign in with Google.');
+      } else if (code === 'auth/captcha-check-failed') {
+        setError('Security check failed. Please refresh the page and try again.');
+      } else if (code === 'auth/quota-exceeded') {
+        setError('SMS service quota reached. Please sign in with Google for instant access.');
+      } else {
+        setError(firebaseErr?.message || 'Failed to dispatch SMS verification. Please try again or use Google Sign-In.');
+      }
     }
-
-    if (!sentViaFirebase) {
-      setOtpBanner(`Greenwood Verification SMS: Your OTP for +91 ${cleanPhone} is ${secureCode}`);
-    }
-
-    setLoading(false);
-    setStep('otp');
-    setResendTimer(30);
-
-    // Auto-focus first OTP box after state transition
-    setTimeout(() => {
-      document.getElementById('otp-0')?.focus();
-    }, 150);
-  };
-
-  const handleCopyOtp = () => {
-    if (!generatedOtp) return;
-    navigator.clipboard.writeText(generatedOtp).then(() => {
-      setCopySuccess(true);
-      const digits = generatedOtp.split('');
-      setOtp(digits);
-      setTimeout(() => setCopySuccess(false), 2500);
-    });
-  };
-
-  // WhatsApp verification link
-  const openWhatsAppOtp = () => {
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-    const codeToSend = generatedOtp || Math.floor(100000 + Math.random() * 900000).toString();
-    if (!generatedOtp) setGeneratedOtp(codeToSend);
-    const msg = encodeURIComponent(
-      `Hello Greenwood Café! My phone number is +91 ${cleanPhone}. My login verification OTP is: ${codeToSend}`
-    );
-    window.open(`https://wa.me/91${PRIMARY_ADMIN_PHONE}?text=${msg}`, '_blank');
   };
 
   const handleOtpChange = (index: number, val: string) => {
@@ -207,50 +184,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
-    // 1. Verify instantaneous code / WhatsApp / Owner PIN first for zero delay
-    let verified = false;
-    if (generatedOtp && code === generatedOtp) {
-      verified = true;
-    } else if (cleanPhone === PRIMARY_ADMIN_PHONE && (code === '123456' || code === '880232')) {
-      verified = true;
-    } else if (confirmationResult && typeof confirmationResult.confirm === 'function') {
-      try {
-        await confirmationResult.confirm(code);
-        verified = true;
-      } catch (err: any) {
-        console.warn('[Firebase Auth] Code verification notice:', err);
-        setError('Invalid verification code from SMS. Please enter the 6-digit code or tap Auto-Fill Code.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    if (!verified) {
+    if (!confirmationResult || typeof confirmationResult.confirm !== 'function') {
+      setError('Session expired. Please request a new SMS verification code.');
       setLoading(false);
-      setError('Invalid OTP code. Please enter the correct 6-digit code received.');
+      setStep('details');
       return;
     }
 
-    // Authentication Success
-    const authData: CustomerAuth = {
-      name: name.trim(),
-      phone: cleanPhone,
-      verified: true,
-      loggedInAt: Date.now(),
-    };
-
-    setCustomerAuth(authData);
-
     try {
-      await api.updateProfile({
-        name: authData.name,
-        phone: `+91 ${authData.phone}`,
-      });
-    } catch {}
+      await confirmationResult.confirm(code);
 
-    setLoading(false);
-    onSuccess(authData);
-    onClose();
+      // Authentication Success
+      const authData: CustomerAuth = {
+        name: name.trim(),
+        phone: cleanPhone,
+        verified: true,
+        loggedInAt: Date.now(),
+      };
+
+      setCustomerAuth(authData);
+
+      try {
+        await api.updateProfile({
+          name: authData.name,
+          phone: `+91 ${authData.phone}`,
+        });
+      } catch {}
+
+      setLoading(false);
+      onSuccess(authData);
+      onClose();
+    } catch (err: any) {
+      console.error('[Firebase Auth] Code verification error:', err);
+      setLoading(false);
+      const errCode = err?.code || '';
+      if (errCode === 'auth/invalid-verification-code') {
+        setError('Incorrect verification code. Please check your SMS messages and enter the correct 6-digit code.');
+      } else if (errCode === 'auth/code-expired') {
+        setError('The verification code has expired. Please click "Resend OTP" to receive a new code.');
+      } else {
+        setError(err?.message || 'Invalid code. Please enter the 6-digit code received on your phone.');
+      }
+    }
   };
 
   // Google Sign-In with Firebase
@@ -438,57 +413,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: 6-Digit Real OTP Entry */}
+        {/* STEP 2: 6-Digit Real SMS OTP Entry */}
         {step === 'otp' && (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            {/* Authentic OTP Status Banner */}
-            {otpBanner && (
-              <div className="bg-[#F0FDF4] border border-[#86EFAC] rounded-xl p-3 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-left">
-                    <p className="text-xs text-[#166534] font-semibold flex items-center gap-1.5">
-                      <span>📩</span> OTP Sent to +91 {phone.replace(/\D/g, '').slice(-10)}
-                    </p>
-                    <p className="text-[11px] text-[#14532D] mt-0.5">
-                      {confirmationResult
-                        ? 'Carrier SMS dispatched. If delayed by network, use instant code:'
-                        : 'Your secure verification code:'}
-                    </p>
-                  </div>
-                  {generatedOtp && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtp(generatedOtp.split(''));
-                        setCopySuccess(true);
-                        setTimeout(() => setCopySuccess(false), 2000);
-                      }}
-                      className="px-2.5 py-1.5 bg-[#166534] text-white rounded-lg text-xs font-semibold hover:bg-[#14532D] active:scale-95 transition-all cursor-pointer shrink-0 shadow-2xs flex items-center gap-1"
-                    >
-                      <span>⚡</span> {copySuccess ? 'Filled!' : 'Auto-Fill'}
-                    </button>
-                  )}
-                </div>
-                {generatedOtp && (
-                  <div className="pt-1.5 border-t border-[#BBF7D0] flex items-center justify-between text-xs">
-                    <span className="text-[#166534]">
-                      Instant Code: <strong className="font-mono font-bold text-sm bg-white px-2 py-0.5 rounded border border-[#86EFAC] text-[#166534] tracking-widest">{generatedOtp}</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyOtp}
-                      className="text-[11px] text-[#166534] font-medium hover:underline cursor-pointer"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Real SMS Verification Notice */}
+            <div className="bg-[#F0FDF4] border border-[#86EFAC] rounded-xl p-3.5 text-center">
+              <p className="text-xs text-[#166534] font-semibold flex items-center justify-center gap-1.5">
+                <span>📲</span> 6-Digit SMS Code Sent to +91 {phone.replace(/\D/g, '').slice(-10)}
+              </p>
+              <p className="text-[11px] text-[#14532D] mt-1">
+                Google SMS service has dispatched a code to your phone. Check your Messages app and enter the 6 digits below.
+              </p>
+            </div>
 
             <div className="text-center">
               <label className="block text-xs font-semibold text-[#17261D] mb-2.5">
-                Enter 6-Digit Code
+                Enter 6-Digit Code from SMS
               </label>
 
               {/* 6 OTP Boxes with full paste and keyboard navigation support */}
@@ -512,35 +452,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
-            {/* Actions: Resend, WhatsApp, Change Number */}
-            <div className="space-y-2.5 pt-2">
-              <div className="flex items-center justify-between text-xs text-[#77766D]">
-                <button
-                  type="button"
-                  onClick={() => setStep('details')}
-                  className="text-[#163E26] hover:underline font-medium cursor-pointer"
-                >
-                  ← Edit Number
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSendOtp()}
-                  disabled={resendTimer > 0}
-                  className="text-[#77766D] hover:text-[#163E26] disabled:opacity-50 font-medium cursor-pointer"
-                >
-                  {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
-                </button>
-              </div>
-
-              {/* WhatsApp Verification Option */}
+            {/* Actions: Resend, Change Number */}
+            <div className="flex items-center justify-between text-xs text-[#77766D] pt-2">
               <button
                 type="button"
-                onClick={openWhatsAppOtp}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#F0FDF4] hover:bg-[#DCFCE7] border border-[#BBF7D0] text-[#166534] text-xs font-semibold transition-colors cursor-pointer"
+                onClick={() => setStep('details')}
+                className="text-[#163E26] hover:underline font-medium cursor-pointer"
               >
-                <span>💬</span>
-                <span>Send Code on WhatsApp</span>
+                ← Edit Number
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSendOtp()}
+                disabled={resendTimer > 0 || loading}
+                className="text-[#163E26] hover:underline disabled:text-[#77766D] disabled:opacity-50 font-medium cursor-pointer"
+              >
+                {resendTimer > 0 ? `Resend SMS OTP in ${resendTimer}s` : 'Resend SMS Code'}
               </button>
             </div>
 
@@ -549,7 +477,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               disabled={loading}
               className="w-full bg-[#163E26] hover:bg-[#1f5635] text-white py-3 rounded-xl font-semibold text-sm shadow-md transition-all active:scale-98 disabled:opacity-75 cursor-pointer mt-2"
             >
-              {loading ? 'Verifying OTP...' : 'Verify & Continue →'}
+              {loading ? 'Verifying with Firebase...' : 'Verify & Continue →'}
             </button>
           </form>
         )}

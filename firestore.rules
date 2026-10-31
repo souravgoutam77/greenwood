@@ -103,11 +103,73 @@ service cloud.firestore {
     //      - reviewPhoto: string (optional, 0-200000 chars)
     //      - createdAt: number or string (required, 0-100 chars if string)
     //
+    // 7. Collection: /users/{userId}
+    //    Document ID: string (10-digit phone number or Firebase Auth UID)
+    //    Fields:
+    //      - phone: string (required, 10 digits)
+    //      - name: string (required, 1-100 chars)
+    //      - email: string (optional, 0-150 chars)
+    //      - addresses: list of maps (required, 0-20 entries)
+    //          Each address map:
+    //            - id: string (required, 1-60 chars)
+    //            - type: string (required, in ['Home', 'Office', 'Other'])
+    //            - addressLine: string (required, 1-300 chars)
+    //            - phone: string (required, 7-20 chars)
+    //            - isDefault: bool (required)
+    //            - flatHouse: string (optional, 0-100 chars)
+    //            - streetArea: string (optional, 0-100 chars)
+    //            - landmark: string (optional, 0-100 chars)
+    //            - city: string (optional, 0-60 chars)
+    //            - pincode: string (optional, 0-10 chars)
+    //      - createdAt: number (required, creation timestamp in ms)
+    //      - updatedAt: number (required, update timestamp in ms)
+    //
     // ===============================================================
 
     // ===============================================================
     // Helper Functions
     // ===============================================================
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user has administrator authorization
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.phone_number != null && (
+          request.auth.token.phone_number == '+918802325537' ||
+          request.auth.token.phone_number == '8802325537'
+        )) ||
+        (request.auth.token.admin == true) ||
+        (request.auth.token.role in ['admin', 'owner']) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Check if authenticated user owns the user profile document
+    function isUserOwner(userId) {
+      return isAuthenticated() && (
+        request.auth.uid == userId ||
+        (request.auth.token.phone_number != null && (
+          request.auth.token.phone_number == ('+91' + userId) ||
+          request.auth.token.phone_number == userId ||
+          request.auth.token.phone_number == ('+' + userId)
+        ))
+      );
+    }
+
+    // Check if authenticated user is the customer associated with the order
+    function isOrderOwner(orderData) {
+      return isAuthenticated() && (
+        (orderData.customerId != null && request.auth.uid == orderData.customerId) ||
+        (request.auth.token.phone_number != null && (
+          request.auth.token.phone_number == ('+91' + orderData.customerPhone) ||
+          request.auth.token.phone_number == orderData.customerPhone
+        ))
+      );
+    }
 
     // Validate that required fields exist
     function hasRequiredFields(data, fields) {
@@ -140,7 +202,7 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Domain Validators (Applied to writes)
+    // Domain Validators (Applied to creates and updates)
     // ===============================================================
 
     function isValidDish(data) {
@@ -213,11 +275,11 @@ service cloud.firestore {
       return item is map &&
         item.keys().hasAll(['name', 'price', 'quantity']) &&
         item.keys().hasOnly(['name', 'price', 'quantity', 'image', 'dishId']) &&
-        item.name is string && item.name.size() >= 1 && item.name.size() <= 100 &&
+        isValidString(item.name, 1, 100) &&
         item.price is number && item.price > 0 && item.price <= 50000 &&
         item.quantity is number && item.quantity >= 1 && item.quantity <= 100 &&
-        (!('image' in item) || (item.image is string && item.image.size() <= 200000)) &&
-        (!('dishId' in item) || (item.dishId is string && item.dishId.size() <= 100));
+        isValidOptionalString(item, 'image', 0, 200000) &&
+        isValidOptionalString(item, 'dishId', 0, 100);
     }
 
     function isValidOrder(data) {
@@ -238,6 +300,7 @@ service cloud.firestore {
         data.items.size() >= 1 &&
         data.items.size() <= 50 &&
         isValidOrderItem(data.items[0]) &&
+        (data.items.size() <= 1 || isValidOrderItem(data.items[1])) &&
         data.total is number && data.total > 0 && data.total <= 500000 &&
         isValidOptionalString(data, 'placedTime', 0, 100) &&
         isValidOptionalString(data, 'completedTime', 0, 100) &&
@@ -269,6 +332,38 @@ service cloud.firestore {
         isValidString(data.reviewText, 0, 1000) &&
         isValidOptionalString(data, 'reviewPhoto', 0, 200000) &&
         (data.createdAt is number || (data.createdAt is string && data.createdAt.size() <= 100));
+    }
+
+    function isValidAddress(addr) {
+      return addr is map &&
+        addr.keys().hasAll(['id', 'type', 'addressLine', 'phone', 'isDefault']) &&
+        addr.keys().hasOnly(['id', 'type', 'addressLine', 'phone', 'isDefault', 'flatHouse', 'streetArea', 'landmark', 'city', 'pincode']) &&
+        isValidString(addr.id, 1, 60) &&
+        addr.type is string && addr.type in ['Home', 'Office', 'Other'] &&
+        isValidString(addr.addressLine, 1, 300) &&
+        isValidString(addr.phone, 7, 20) &&
+        addr.isDefault is bool &&
+        isValidOptionalString(addr, 'flatHouse', 0, 100) &&
+        isValidOptionalString(addr, 'streetArea', 0, 100) &&
+        isValidOptionalString(addr, 'landmark', 0, 100) &&
+        isValidOptionalString(addr, 'city', 0, 60) &&
+        isValidOptionalString(addr, 'pincode', 0, 10);
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(data, ['phone', 'name', 'addresses', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(data, ['phone', 'name', 'email', 'addresses', 'createdAt', 'updatedAt']) &&
+        isValidString(data.phone, 10, 10) &&
+        data.phone.matches('^[0-9]{10}$') &&
+        isValidString(data.name, 1, 100) &&
+        isValidOptionalString(data, 'email', 0, 150) &&
+        data.addresses is list &&
+        data.addresses.size() <= 20 &&
+        (data.addresses.size() == 0 || isValidAddress(data.addresses[0])) &&
+        (data.addresses.size() <= 1 || isValidAddress(data.addresses[1])) &&
+        (data.addresses.size() <= 2 || isValidAddress(data.addresses[2])) &&
+        data.createdAt is number &&
+        data.updatedAt is number;
     }
 
     // ===============================================================
@@ -303,14 +398,55 @@ service cloud.firestore {
       allow delete: if adminId != '8802325537';
     }
 
-    // 5. Orders: Created by customers with initial 'New' status, modifiable with schema validation
+    // 5. Orders: Created by customers with initial 'New' status, modifiable with schema validation & anti-tampering guards
     match /orders/{orderId} {
-      allow read, list: if true;
+      // Direct document lookup allowed for admin or the order owner
+      allow get: if isAdmin() || isOrderOwner(resource.data);
+
+      // Order query/list allowed for admin (all orders) or customers filtering strictly by their own customerPhone
+      allow list: if isAdmin() || (
+        isAuthenticated() && (
+          (request.auth.token.phone_number != null && (
+            resource.data.customerPhone == request.auth.token.phone_number ||
+            ('+91' + resource.data.customerPhone) == request.auth.token.phone_number
+          )) ||
+          (resource.data.customerId != null && resource.data.customerId == request.auth.uid)
+        )
+      );
+
+      // Order creation: strictly validated, initial 'New' status, matching ID, cannot set administrative or review fields
       allow create: if isValidOrder(request.resource.data) &&
         request.resource.data.status == 'New' &&
-        request.resource.data.id == orderId;
-      allow update: if isValidOrder(request.resource.data);
-      allow delete: if true;
+        request.resource.data.id == orderId &&
+        !('rating' in request.resource.data) &&
+        !('reviewText' in request.resource.data) &&
+        !('reviewPhoto' in request.resource.data) &&
+        !('ratedAt' in request.resource.data) &&
+        !('completedTime' in request.resource.data) &&
+        !('declineReason' in request.resource.data) &&
+        (isAdmin() || !isAuthenticated() || isOrderOwner(request.resource.data));
+
+      // Order update:
+      // Case A: Admin can advance order status ('Preparing', 'Out for Delivery', 'Completed', 'Declined') and set logistics
+      // Case B: Customer who owns the order can submit rating/review on Completed/Delivered orders (review fields only)
+      allow update: if isValidOrder(request.resource.data) &&
+        request.resource.data.id == resource.data.id &&
+        (
+          isAdmin() ||
+          (
+            isOrderOwner(resource.data) &&
+            resource.data.status in ['Completed', 'Delivered'] &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'reviewText', 'reviewPhoto', 'ratedAt']) &&
+            request.resource.data.customerPhone == resource.data.customerPhone &&
+            request.resource.data.customerName == resource.data.customerName &&
+            request.resource.data.total == resource.data.total &&
+            request.resource.data.items == resource.data.items &&
+            request.resource.data.status == resource.data.status
+          )
+        );
+
+      // Delete: Strictly restricted to administrators
+      allow delete: if isAdmin();
     }
 
     // 6. Reviews: Publicly readable customer feedback and ratings, modifiable with schema validation
@@ -320,9 +456,24 @@ service cloud.firestore {
       allow delete: if true;
     }
 
-    // 7. User Profiles: Isolated by user ID
+    // 7. User Profiles: Isolated by user phone / UID with strict schema validation
     match /users/{userId} {
-      allow read, write: if true;
+      // Only the authenticated owner of the document or admin can read the user profile (protects PII)
+      allow read: if isUserOwner(userId) || isAdmin();
+
+      // Only the authenticated owner or admin can create the user profile document
+      allow create: if (isUserOwner(userId) || isAdmin()) &&
+        isValidUser(request.resource.data) &&
+        (request.resource.data.phone == userId || request.auth.uid == userId);
+
+      // Only the authenticated owner or admin can update the profile; phone and createdAt are immutable
+      allow update: if (isUserOwner(userId) || isAdmin()) &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.phone == resource.data.phone &&
+        request.resource.data.createdAt == resource.data.createdAt;
+
+      // Profile deletion: strictly restricted to owner or admin
+      allow delete: if isAdmin() || isUserOwner(userId);
     }
 
     // Default Deny: All other documents and subcollections are denied
