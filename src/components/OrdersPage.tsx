@@ -116,7 +116,9 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               ? (isDelivery ? 'Delivered fresh to your doorstep' : 'Handed over at takeaway counter')
               : latest.status === 'Out for Delivery'
               ? (isDelivery ? 'Rider is on the way to your address!' : 'Ready for pickup at counter!')
-              : 'Freshly prepared by Greenwood chefs',
+              : latest.status === 'Preparing'
+              ? 'Freshly prepared by Greenwood chefs'
+              : 'Order received by kitchen',
           items: (latest.items || []).map((i: any, idx: number) => ({
             id: `live-item-${idx}`,
             name: i.name,
@@ -655,14 +657,14 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-serif text-sm sm:text-base font-bold text-[#17261D]">
-                    Order Items <span className="text-xs font-normal text-[#77766D] font-sans">(4 items)</span>
+                    Order Items <span className="text-xs font-normal text-[#77766D] font-sans">({liveOrder.items.length} items)</span>
                   </h3>
                   <button
                     type="button"
                     onClick={() =>
                       setActiveModal({
                         type: 'details',
-                        title: 'Order Details • #GW-8492',
+                        title: `Order Details • ${liveOrder.id}`,
                         items: liveOrder.items,
                       })
                     }
@@ -1006,7 +1008,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                     </div>
                     <div className="text-xs text-[#4B5149] truncate">
                       <span className="font-medium text-[#17261D]">{order.dishesSummary}</span>
-                      {order.moreCount && (
+                      {Boolean(order.moreCount && order.moreCount > 0) && (
                         <span className="text-[#77766D] ml-1">+{order.moreCount} more</span>
                       )}
                     </div>

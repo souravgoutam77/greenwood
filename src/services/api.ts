@@ -649,9 +649,11 @@ export const api = {
       customerAddressOrTable: payload.customerAddress || 'Narela Hub, Delhi - 110040',
       specialInstruction: payload.specialInstruction,
       items: payload.items.map((it) => ({
+        dishId: it.dishId,
         name: it.name,
         price: it.price,
         quantity: it.quantity,
+        lineTotal: it.price * it.quantity,
         image: it.image || '/images/dish-detail/rec-dal-makhani.jpg',
       })),
       subtotal,

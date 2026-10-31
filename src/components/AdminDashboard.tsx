@@ -100,7 +100,7 @@ export interface AdminOrder {
 export interface MenuItemData {
   id: string;
   name: string;
-  category: 'North Indian' | 'Starters' | 'Pizza & Pasta' | 'Breads & Rice' | 'Beverages & Desserts';
+  category: 'North Indian' | 'Chinese' | 'Tandoori' | 'Continental' | 'Cold Beverages & Shakes' | string;
   price: number;
   inStock: boolean;
   image: string;
@@ -2053,9 +2053,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {/* Filters */}
                 <div className="flex flex-col gap-2 pt-1">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    {/* Category Filter Pills */}
+                    {/* Category Filter Pills (Exact 5 Canonical Categories) */}
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                      {['All', 'North Indian', 'Starters', 'Pizza & Pasta', 'Breads & Rice', 'Beverages & Desserts'].map((cat) => (
+                      {['All', 'Chinese', 'Tandoori', 'Continental', 'North Indian', 'Cold Beverages & Shakes'].map((cat) => (
                         <button
                           key={cat}
                           type="button"

@@ -1,45 +1,76 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.phone_number != null && (
+          exists(/databases/$(database)/documents/admins/$(request.auth.token.phone_number)) ||
+          exists(/databases/$(database)/documents/admins/$(request.auth.token.phone_number.replace('^\\+91', '')))
+        )) ||
+        request.auth.token.admin == true
+      );
+    }
 
-    // 1. Orders: Multi-device live sync, customer / guest order placement, POS live dashboard onSnapshot listener
+    // 1. Catalog & Public Configuration (Public Read, Admin Write)
+    match /dishes/{dishId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 2. Orders: Public/Guest creation allowed; updates restricted to staff/admin
     match /orders/{orderId} {
       allow create: if true;
-      allow read, update, delete: if true;
+      allow read: if true;
+      allow update, delete: if isAdmin();
     }
 
-    // 2. Settings: Store config, operational toggles, banner uploads (settings/config & settings/storeConfig), admin roster
-    match /settings/{document=**} {
-      allow read, write: if true;
-    }
-
-    // 3. Dishes: Menu catalog, real-time availability, dish management
-    match /dishes/{dishId} {
-      allow read, write: if true;
-    }
-
-    // 4. Banners: Hero promotional sliders and banner management
-    match /banners/{bannerId} {
-      allow read, write: if true;
-    }
-
-    // 5. Users: Customer accounts, saved addresses, and preferences
+    // 3. User Profiles & Addresses (User-isolated: supports UID and 10-digit / E.164 phone)
     match /users/{userId} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        (request.auth.token.phone_number != null && (
+          request.auth.token.phone_number == userId ||
+          request.auth.token.phone_number == ('+91' + userId) ||
+          request.auth.token.phone_number.replace('^\\+91', '') == userId
+        ))
+      );
     }
 
-    // 6. Reviews: Customer feedback, ratings, and testimonials
+    // 4. Reviews & Table Reservations
     match /reviews/{reviewId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAdmin();
     }
 
-    // 7. Admins: Authorized staff and manager profiles
+    match /reservations/{resId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 5. Admin Roster (Strictly protected)
     match /admins/{adminId} {
-      allow read, write: if true;
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
-    // Default Deny: All other unmatched documents and subcollections are closed
+    // Default Deny
     match /{document=**} {
       allow read, write: if false;
     }
