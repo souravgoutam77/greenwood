@@ -170,8 +170,8 @@ export const HeroBanner: React.FC = () => {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Banner Slide Frame */}
-        <div className="relative w-full aspect-[4/3] sm:aspect-[21/9] md:aspect-[674/144] min-h-[220px] sm:min-h-0 overflow-hidden">
+        {/* Banner Slide Frame (Mobile: square 1:1, Tablet: 16:10, Desktop: 1920/800 ~2.4:1 high impact height) */}
+        <div className="relative w-full aspect-square sm:aspect-[16/10] md:aspect-[1920/800] min-h-[360px] sm:min-h-[440px] md:min-h-[550px] lg:min-h-[640px] overflow-hidden">
           {banners.map((slide, index) => {
             const isActive = index === currentSlide;
             const desktopSrc = slide.imageDesktop || '/images/hero-bg-2400.jpg';

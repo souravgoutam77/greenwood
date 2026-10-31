@@ -101,10 +101,14 @@ const heroBannerSource = fs.readFileSync(path.join(rootDir, 'src', 'components',
 
 assert(heroBannerSource.includes('onError'), 'HeroBanner has onError fallback handler on <img>');
 assert(heroBannerSource.includes('/images/hero-bg-2400.jpg'), 'HeroBanner falls back to /images/hero-bg-2400.jpg');
+assert(heroBannerSource.includes('aspect-[1920/800]'), 'HeroBanner uses aspect-[1920/800] for desktop height');
+assert(heroBannerSource.includes('aspect-square'), 'HeroBanner uses aspect-square on mobile for 1:1 square assets');
 
 assert(adminDashboardSource.includes('handleDeleteBanner'), 'handleDeleteBanner exists in AdminDashboard');
 assert(adminDashboardSource.includes('🗑 Delete Banner'), 'Explicit [🗑 Delete Banner] button rendered');
-assert(adminDashboardSource.includes('bannerUrl: \'\''), 'Resetting bannerUrl to empty string supported in AdminDashboard');
+assert(!adminDashboardSource.includes('Reset to Default'), 'Removed "Reset to Default" button from AdminDashboard');
+assert(adminDashboardSource.includes('1920 × 800 px'), 'AdminDashboard displays 1920 × 800 px desktop guide');
+assert(adminDashboardSource.includes('1080 × 1080 px'), 'AdminDashboard displays 1080 × 1080 px mobile guide');
 
 // Verify technical text removed
 assert(!adminDashboardSource.includes('⚡ Quick Hero Banner Upload (Live Cloud Firestore Sync)'), 'Technical upload text block removed from AdminDashboard');

@@ -2860,48 +2860,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           className="hidden"
                         />
                       </label>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!window.confirm('Reset homepage hero banner to default?')) return;
-                          try {
-                            if (firestore) {
-                              await setDoc(doc(firestore, 'settings', 'storeConfig'), { bannerUrl: '', updatedAt: Date.now() }, { merge: true });
-                            }
-                            showToast('Homepage hero banner reset to default.');
-                          } catch (err: any) {
-                            showToast('Failed to reset banner: ' + err.message);
-                          }
-                        }}
-                        className="text-xs font-medium text-[#C83A25] hover:bg-[#FCE8E6] border border-[#C83A25]/30 px-3 py-2 rounded-xl cursor-pointer transition-colors"
-                        title="Reset to default Greenwood hero banner"
-                      >
-                        Reset to Default
-                      </button>
                     </div>
                   </div>
 
                   {/* Banner Aspect Ratio Guidance (Item 17) */}
                   <div className="bg-[#FAF6EE] border border-[#E8DDCA] rounded-xl p-3 sm:p-4 text-xs text-[#4B5149] space-y-2">
                     <div className="font-bold text-xs text-[#17261D] flex items-center gap-1.5 uppercase tracking-wider">
-                      <span>📐 Recommended Banner Aspect Ratios & Dimensions</span>
+                      <span>📐 Recommended Banner Aspect Ratios &amp; Dimensions</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-sans">
                       <div className="bg-[#FFFDF8] p-2.5 rounded-lg border border-[#E8DDCA]/80 space-y-0.5">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-[#163E26]">🖥 Desktop Banner</span>
-                          <span className="text-[10px] bg-[#E8DDCA]/60 font-mono font-bold px-1.5 py-0.5 rounded text-[#2B180F]">3.84 : 1</span>
+                          <span className="font-bold text-[#163E26]">🖥️ Desktop Banner Image</span>
+                          <span className="text-[10px] bg-[#E8DDCA]/60 font-mono font-bold px-1.5 py-0.5 rounded text-[#2B180F]">2.4 : 1</span>
                         </div>
-                        <div className="text-[11px] text-[#17261D] font-bold">1920 × 500 px</div>
-                        <p className="text-[10px] text-[#77766D]">Cinematic wide banner for full-screen desktop screens.</p>
+                        <div className="text-[11px] text-[#17261D] font-bold">1920 × 800 px — High Impact Cinematic Height</div>
+                        <p className="text-[10px] text-[#77766D]">Optimized high-impact wide banner for full-screen desktop screens.</p>
                       </div>
                       <div className="bg-[#FFFDF8] p-2.5 rounded-lg border border-[#E8DDCA]/80 space-y-0.5">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-[#163E26]">📱 Mobile Banner</span>
-                          <span className="text-[10px] bg-[#E8DDCA]/60 font-mono font-bold px-1.5 py-0.5 rounded text-[#2B180F]">4 : 3</span>
+                          <span className="font-bold text-[#163E26]">📱 Mobile Banner Image</span>
+                          <span className="text-[10px] bg-[#E8DDCA]/60 font-mono font-bold px-1.5 py-0.5 rounded text-[#2B180F]">1 : 1 / 1.2 : 1</span>
                         </div>
-                        <div className="text-[11px] text-[#17261D] font-bold">800 × 600 px (20% Taller)</div>
-                        <p className="text-[10px] text-[#77766D]">Optimized mobile aspect ratio with zero text overlay obstruction.</p>
+                        <div className="text-[11px] text-[#17261D] font-bold">1080 × 1080 px (1:1 Square) or 1080 × 900 px</div>
+                        <p className="text-[10px] text-[#77766D]">Optimized mobile aspect ratio with zero top/bottom cropping.</p>
                       </div>
                     </div>
                     <p className="text-[10px] text-[#8F5D2C] italic">
