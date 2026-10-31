@@ -69,6 +69,10 @@ export interface ApiOrder {
   prepTime?: string;
   declineReason?: string;
   timestamp?: number;
+  rating?: number;
+  reviewText?: string;
+  reviewPhoto?: string;
+  ratedAt?: number | string;
 }
 
 export interface CreateOrderPayload {
@@ -311,20 +315,23 @@ function withTimeout<T>(promise: Promise<T>, ms = 1200): Promise<T> {
 export const api = {
   // 1. Settings
   async getSettings(): Promise<ApiSettings> {
-    let settings: ApiSettings = DEFAULT_SETTINGS;
+    // 1. Start with local storage so admin manual toggles persist without being overwritten
+    let settings = getStorageItem<ApiSettings>('settings', DEFAULT_SETTINGS);
+
     if (firestore) {
       try {
         const snap = await getDoc(doc(firestore, 'settings', 'config'));
         if (snap.exists()) {
           const cloudSettings = snap.data() as ApiSettings;
-          settings = { ...DEFAULT_SETTINGS, ...cloudSettings };
+          settings = { ...settings, ...cloudSettings };
         }
       } catch (err) {
         console.warn('Firestore getSettings notice:', err);
       }
-    } else {
-      settings = getStorageItem<ApiSettings>('settings', DEFAULT_SETTINGS);
     }
+
+    // Determine actual effective kitchen status (respects manual override if set)
+    settings.is_kitchen_open = computeEffectiveStoreStatus(settings);
 
     setStorageItem('settings', settings, false);
     return settings;
@@ -333,12 +340,21 @@ export const api = {
   async updateSettings(settings: Partial<ApiSettings>): Promise<{ success: boolean; settings: ApiSettings }> {
     const current = getStorageItem<ApiSettings>('settings', DEFAULT_SETTINGS);
     const updated = { ...current, ...settings };
+
+    // When admin explicitly updates is_kitchen_open, enforce manual override
+    if (settings.is_kitchen_open !== undefined) {
+      updated.manual_override = true;
+      updated.manual_override_time = new Date().toISOString();
+    }
+
     setStorageItem('settings', updated, true);
 
     if (firestore) {
       // Build safe config object that strictly adheres to Firestore rules whitelist
       const safeConfig = {
         is_kitchen_open: Boolean(updated.is_kitchen_open),
+        manual_override: Boolean(updated.manual_override),
+        manual_override_time: String(updated.manual_override_time || ''),
         home_delivery_enabled: Boolean(updated.home_delivery_enabled),
         takeaway_enabled: Boolean(updated.takeaway_enabled),
         opening_hours: String(updated.opening_hours || '11:00 AM – 11:00 PM'),
@@ -533,7 +549,8 @@ export const api = {
     const currentOrders = getStorageItem<ApiOrder[]>('orders', DEFAULT_ORDERS);
     const newId = `#GW-${Math.floor(1000 + Math.random() * 9000)}`;
     const now = new Date();
-    const timeFormatted = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateFormatted = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const timeFormatted = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
     const subtotal = payload.items.reduce((s, i) => s + i.price * i.quantity, 0);
     const isTakeaway = payload.orderType === 'takeaway' || payload.orderType === 'Takeaway';
     const deliveryFee = isTakeaway || subtotal >= 500 ? 0 : 49;
@@ -542,7 +559,7 @@ export const api = {
     const newOrder: ApiOrder = {
       id: newId,
       status: 'New',
-      placedTime: `Placed at ${timeFormatted}`,
+      placedTime: `${dateFormatted} at ${timeFormatted}`,
       orderType: isTakeaway ? 'Takeaway' : payload.orderType === 'dine-in' ? 'Dine-in' : 'Home Delivery',
       paymentMode: (payload.paymentMode as any) || 'Cash on Delivery',
       customerName: payload.customerName || 'Customer',
@@ -588,7 +605,8 @@ export const api = {
     const currentOrders = getStorageItem<ApiOrder[]>('orders', DEFAULT_ORDERS);
     let updatedOrder: ApiOrder | null = null;
     const now = new Date();
-    const timeFormatted = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateFormatted = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const timeFormatted = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
     const nextList = currentOrders.map((o) => {
       if (o.id === orderId) {
@@ -597,7 +615,7 @@ export const api = {
           status,
           declineReason: options.declineReason ?? o.declineReason,
           prepTime: options.prepTime ?? o.prepTime,
-          completedTime: status === 'Completed' ? `Delivered at ${timeFormatted}` : o.completedTime,
+          completedTime: status === 'Completed' ? `${dateFormatted} at ${timeFormatted}` : o.completedTime,
           deliveryPartnerName: options.deliveryPartnerName ?? o.deliveryPartnerName,
           deliveryPartnerPhone: options.deliveryPartnerPhone ?? o.deliveryPartnerPhone,
         };
@@ -617,6 +635,51 @@ export const api = {
     }
 
     return { success: true, order: updatedOrder || (currentOrders[0] as ApiOrder) };
+  },
+
+  async submitOrderReview(
+    orderId: string,
+    rating: number,
+    reviewText = '',
+    reviewPhoto = ''
+  ): Promise<{ success: boolean }> {
+    const currentOrders = getStorageItem<ApiOrder[]>('orders', DEFAULT_ORDERS);
+    let updatedOrder: ApiOrder | null = null;
+    const nextList = currentOrders.map((o) => {
+      if (o.id === orderId) {
+        updatedOrder = {
+          ...o,
+          rating,
+          reviewText,
+          reviewPhoto,
+          ratedAt: Date.now(),
+        };
+        return updatedOrder;
+      }
+      return o;
+    });
+
+    setStorageItem('orders', nextList, true);
+    broadcastCustomEvent('gw_orders_changed', updatedOrder);
+
+    if (firestore && updatedOrder) {
+      setDoc(doc(firestore, 'orders', orderId), cleanFirestoreData(updatedOrder), { merge: true }).catch((err) => {
+        console.warn('Firestore submitOrderReview notice:', err);
+      });
+      // Also add to public reviews collection
+      const safeReviewId = `rev-${orderId.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`;
+      setDoc(doc(firestore, 'reviews', safeReviewId), {
+        id: safeReviewId,
+        orderId,
+        customerName: (updatedOrder as any).customerName || 'Greenwood Guest',
+        rating,
+        reviewText,
+        reviewPhoto,
+        createdAt: Date.now(),
+      }).catch((err) => console.warn('Firestore review set notice:', err));
+    }
+
+    return { success: true };
   },
 
   // 4. Profile & Addresses

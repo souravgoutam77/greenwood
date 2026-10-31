@@ -23,14 +23,20 @@ const ProfilePage = React.lazy(() => import('./components/ProfilePage').then(m =
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const AboutPage = React.lazy(() => import('./components/AboutPage').then(m => ({ default: m.AboutPage })));
 const ContactPage = React.lazy(() => import('./components/ContactPage').then(m => ({ default: m.ContactPage })));
+const FavouritesPage = React.lazy(() => import('./components/FavouritesPage').then(m => ({ default: m.FavouritesPage })));
 const LegalPolicyModal = React.lazy(() => import('./components/LegalPolicyModal').then(m => ({ default: m.LegalPolicyModal })));
 import { RESTAURANT_DATA } from './data/restaurantData';
 import type { Dish } from './data/restaurantData';
+import { firestore } from './services/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export const App: React.FC = () => {
   // View routing (Default to home or hash-based view)
-  const [currentView, setCurrentView] = useState<'item-detail' | 'home' | 'menu' | 'cart' | 'orders' | 'profile' | 'admin' | 'about' | 'contact'>(() => {
+  const [currentView, setCurrentView] = useState<'item-detail' | 'home' | 'menu' | 'cart' | 'orders' | 'profile' | 'admin' | 'about' | 'contact' | 'favourites'>(() => {
     if (typeof window !== 'undefined') {
+      if (window.location.hash === '#favourites' || window.location.hash === '#favorites') {
+        return 'favourites';
+      }
       if (window.location.hash === '#menu') {
         return 'menu';
       }
@@ -106,6 +112,21 @@ export const App: React.FC = () => {
       }
     }).catch(() => {});
 
+    // Live Firestore onSnapshot subscription for settings/config
+    let unsubscribeSettings: (() => void) | null = null;
+    if (firestore) {
+      try {
+        unsubscribeSettings = onSnapshot(doc(firestore, 'settings', 'config'), (snap) => {
+          if (snap.exists() && isMounted) {
+            const data = snap.data();
+            if (data.is_kitchen_open !== undefined) {
+              setIsKitchenOpen(Boolean(data.is_kitchen_open));
+            }
+          }
+        }, (err) => console.warn('Live settings sync notice in App:', err));
+      } catch {}
+    }
+
     const handleSettingsUpdate = (e: any) => {
       const s = e.detail;
       if (s && isMounted && s.is_kitchen_open !== undefined) {
@@ -117,6 +138,7 @@ export const App: React.FC = () => {
 
     return () => {
       isMounted = false;
+      unsubscribeSettings?.();
       window.removeEventListener('gw_settings_updated', handleSettingsUpdate);
       window.removeEventListener('storage', handleSettingsUpdate);
     };
@@ -127,6 +149,8 @@ export const App: React.FC = () => {
     const handleHashChange = () => {
       if (!window.location.hash || window.location.hash === '#home' || window.location.hash === '#') {
         setCurrentView('home');
+      } else if (window.location.hash === '#favourites' || window.location.hash === '#favorites') {
+        setCurrentView('favourites');
       } else if (window.location.hash === '#menu') {
         setCurrentView('menu');
       } else if (window.location.hash === '#cart') {
@@ -203,6 +227,10 @@ export const App: React.FC = () => {
     if (href === '#home') {
       setCurrentView('home');
       window.location.hash = '#home';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (href === '#favourites' || href === '#favorites') {
+      setCurrentView('favourites');
+      window.location.hash = '#favourites';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (href === '#menu') {
       setCurrentView('menu');
@@ -420,6 +448,16 @@ export const App: React.FC = () => {
         ) : currentView === 'contact' ? (
           <ContactPage
             onNavigateToMenu={handleSeeAllDishes}
+          />
+        ) : currentView === 'favourites' ? (
+          <FavouritesPage
+            onAddToCart={handleAddToCart}
+            onNavigateToMenu={handleSeeAllDishes}
+            onDishClick={(_dish) => {
+              setCurrentView('item-detail');
+              window.location.hash = '#butter-paneer';
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         ) : (
           <>

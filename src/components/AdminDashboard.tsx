@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { VegBadge, LeafBranch } from './Icons';
 import { api, ensureFullCatalogue, computeEffectiveStoreStatus, type ApiBanner } from '../services/api';
 import { firestore } from '../services/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 
 export interface AdminOrderItem {
   name: string;
@@ -258,12 +258,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     loadInitialData();
 
-    // Live Firestore onSnapshot listeners for orders & dishes
+    // Live Firestore onSnapshot listeners for orders, dishes & settings
     let unsubscribeOrders: (() => void) | null = null;
     let unsubscribeDishes: (() => void) | null = null;
+    let unsubscribeSettings: (() => void) | null = null;
 
     if (firestore) {
       try {
+        const settingsRef = doc(firestore, 'settings', 'config');
+        unsubscribeSettings = onSnapshot(settingsRef, (snap) => {
+          if (snap.exists() && isMounted) {
+            const data = snap.data();
+            if (data.is_kitchen_open !== undefined) {
+              setIsKitchenOpen(Boolean(data.is_kitchen_open));
+            }
+          }
+        }, (err) => console.warn('[Admin POS] Firestore settings sync notice:', err));
+
         const ordersRef = collection(firestore, 'orders');
         unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
           if (!snapshot.empty) {
@@ -343,6 +354,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       isMounted = false;
       if (unsubscribeOrders) unsubscribeOrders();
       if (unsubscribeDishes) unsubscribeDishes();
+      if (unsubscribeSettings) unsubscribeSettings();
       if (bc) bc.close();
       window.removeEventListener('gw_orders_changed', handleLocalOrderChange);
       window.removeEventListener('gw_dishes_changed', handleLocalDishesChange);
@@ -714,6 +726,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'desktop' | 'mobile') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setCompressingImage(true);
+      const originalKb = Math.round(file.size / 1024);
+      const maxWidth = target === 'desktop' ? 1200 : 800;
+      const maxHeight = target === 'desktop' ? 500 : 600;
+      const compressed = await compressImageFile(file, maxWidth, maxHeight, 0.80);
+      const compressedKb = Math.round((compressed.length * 3) / 4 / 1024);
+      setCompressedSizeInfo(`Banner optimized: ${originalKb} KB → ~${compressedKb} KB`);
+      if (target === 'desktop') {
+        setBannerForm((prev) => ({ ...prev, imageDesktop: compressed }));
+      } else {
+        setBannerForm((prev) => ({ ...prev, imageMobile: compressed }));
+      }
+    } catch (err) {
+      console.error('Banner compression failed:', err);
+      showToast('Failed to optimize banner image.');
+    } finally {
+      setCompressingImage(false);
+    }
+  };
+
   // Social Reels Management (Item 23)
   const handleSaveReels = (reels: Array<{ id: string; image: string; reelUrl: string; alt: string }>) => {
     setSocialReels(reels);
@@ -863,6 +899,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       await api.updateSettings({
         is_kitchen_open: isKitchenOpen,
+        manual_override: true,
+        manual_override_time: new Date().toISOString(),
         home_delivery_enabled: homeDeliveryEnabled,
         takeaway_enabled: takeawayEnabled,
         opening_hours: openingHours,
@@ -3026,11 +3064,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       onChange={(e) => setEditDishForm({ ...editDishForm, category: e.target.value as any })}
                       className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs focus:outline-none"
                     >
+                      <option value="Chinese">Chinese</option>
+                      <option value="Tandoori">Tandoori</option>
+                      <option value="Continental">Continental</option>
                       <option value="North Indian">North Indian</option>
-                      <option value="Starters">Starters</option>
-                      <option value="Pizza & Pasta">Pizza & Pasta</option>
-                      <option value="Breads & Rice">Breads & Rice</option>
-                      <option value="Beverages & Desserts">Beverages & Desserts</option>
+                      <option value="Cold Beverages & Shakes">Cold Beverages & Shakes</option>
                     </select>
                   </div>
 
@@ -3137,11 +3175,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       onChange={(e) => setNewDishForm({ ...newDishForm, category: e.target.value as any })}
                       className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs focus:outline-none"
                     >
+                      <option value="Chinese">Chinese</option>
+                      <option value="Tandoori">Tandoori</option>
+                      <option value="Continental">Continental</option>
                       <option value="North Indian">North Indian</option>
-                      <option value="Starters">Starters</option>
-                      <option value="Pizza & Pasta">Pizza & Pasta</option>
-                      <option value="Breads & Rice">Breads & Rice</option>
-                      <option value="Beverages & Desserts">Beverages & Desserts</option>
+                      <option value="Cold Beverages & Shakes">Cold Beverages & Shakes</option>
                     </select>
                   </div>
 
@@ -3263,26 +3301,81 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Desktop Image URL</label>
+                {/* Desktop & Mobile Banner Images with Real File Upload & Canvas Compression */}
+                <div className="space-y-3">
+                  {/* Desktop Banner */}
+                  <div className="p-2.5 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-[#17261D]">
+                        🖥️ Desktop Banner Image (1920 × 500 px)
+                      </label>
+                      <span className="text-[10px] text-[#77766D]">Auto Compressed</span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      {bannerForm.imageDesktop ? (
+                        <img
+                          src={bannerForm.imageDesktop}
+                          alt="Desktop Banner Preview"
+                          className="w-20 h-10 object-cover rounded-md border border-[#E8DDCA] shrink-0"
+                        />
+                      ) : (
+                        <div className="w-20 h-10 rounded-md bg-[#FAF6EE] border border-dashed border-[#E8DDCA] flex items-center justify-center text-[10px] text-[#77766D] shrink-0">
+                          No image
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleBannerUpload(e, 'desktop')}
+                          className="text-[10px] text-[#4B5149] file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-[#163E26] file:text-white hover:file:bg-[#1E5233] cursor-pointer"
+                        />
+                      </div>
+                    </div>
                     <input
                       type="text"
                       value={bannerForm.imageDesktop ?? ''}
                       onChange={(e) => setBannerForm({ ...bannerForm, imageDesktop: e.target.value })}
-                      placeholder="/images/hero-bg-2400.jpg"
-                      className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs font-mono text-[#17261D] focus:outline-none"
+                      placeholder="Or enter image URL: /images/hero-bg-2400.jpg"
+                      className="w-full bg-[#FFFDF8] p-1.5 rounded-lg border border-[#E8DDCA] text-[11px] font-mono text-[#17261D] focus:outline-none"
                     />
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#77766D] block mb-1">Mobile Image URL</label>
+                  {/* Mobile Banner */}
+                  <div className="p-2.5 bg-[#FAF6EE] rounded-xl border border-[#E8DDCA] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-[#17261D]">
+                        📱 Mobile Banner Image (800 × 600 px)
+                      </label>
+                      <span className="text-[10px] text-[#77766D]">Auto Compressed</span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      {bannerForm.imageMobile ? (
+                        <img
+                          src={bannerForm.imageMobile}
+                          alt="Mobile Banner Preview"
+                          className="w-14 h-12 object-cover rounded-md border border-[#E8DDCA] shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-12 rounded-md bg-[#FAF6EE] border border-dashed border-[#E8DDCA] flex items-center justify-center text-[10px] text-[#77766D] shrink-0">
+                          No image
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleBannerUpload(e, 'mobile')}
+                          className="text-[10px] text-[#4B5149] file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-[#163E26] file:text-white hover:file:bg-[#1E5233] cursor-pointer"
+                        />
+                      </div>
+                    </div>
                     <input
                       type="text"
                       value={bannerForm.imageMobile ?? ''}
                       onChange={(e) => setBannerForm({ ...bannerForm, imageMobile: e.target.value })}
-                      placeholder="/images/hero-bg-mobile-1200.jpg"
-                      className="w-full bg-[#FAF6EE] p-2 rounded-lg border border-[#E8DDCA] text-xs font-mono text-[#17261D] focus:outline-none"
+                      placeholder="Or enter image URL: /images/hero-bg-mobile-1200.jpg"
+                      className="w-full bg-[#FFFDF8] p-1.5 rounded-lg border border-[#E8DDCA] text-[11px] font-mono text-[#17261D] focus:outline-none"
                     />
                   </div>
                 </div>

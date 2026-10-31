@@ -18,7 +18,7 @@ service cloud.firestore {
     //      - subcategory: string (optional, 0-60 chars)
     //      - price: number (required, > 0 and <= 50000)
     //      - description: string (required, 0-1000 chars)
-    //      - image: string (required, 1-500 chars)
+    //      - image: string (required, 1-200000 chars, URL or Base64 data URL)
     //      - inStock: bool (required)
     //      - rating: number (optional, 0.0 - 5.0)
     //      - reviews_count: number (optional, >= 0 and <= 100000)
@@ -31,8 +31,8 @@ service cloud.firestore {
     //      - id: string (required, 1-100 chars)
     //      - title: string (required, 1-150 chars)
     //      - subtitle: string (optional, 0-300 chars)
-    //      - imageDesktop: string (required, 1-500 chars)
-    //      - imageMobile: string (required, 1-500 chars)
+    //      - imageDesktop: string (required, 1-200000 chars, URL or Base64 data URL)
+    //      - imageMobile: string (required, 1-200000 chars, URL or Base64 data URL)
     //      - linkUrl: string (required, 1-300 chars)
     //      - isActive: bool (required)
     //      - displayOrder: number (required, >= 0 and <= 1000)
@@ -48,6 +48,8 @@ service cloud.firestore {
     //      - restaurant_phone: string (required, 1-30 chars)
     //      - kitchen_phone: string (required, 1-30 chars)
     //      - audio_alerts: bool (optional)
+    //      - manual_override: bool (optional)
+    //      - manual_override_time: string (optional, 0-100 chars)
     //    Document 'admins':
     //      - phones: list of strings (required, 1-20 entries, each 10-15 chars)
     //
@@ -85,6 +87,21 @@ service cloud.firestore {
     //      - declineReason: string (optional, 0-200 chars)
     //      - timestamp: number (optional)
     //      - customerId: string (optional, 0-128 chars)
+    //      - rating: number (optional, 1 to 5)
+    //      - reviewText: string (optional, 0-1000 chars)
+    //      - reviewPhoto: string (optional, 0-200000 chars)
+    //      - ratedAt: number or string (optional, 0-100 chars if string)
+    //
+    // 6. Collection: /reviews/{reviewId}
+    //    Document ID: string (e.g., 'rev-1', 'review-1730000000000')
+    //    Fields:
+    //      - id: string (required, 1-100 chars)
+    //      - orderId: string (required, 1-100 chars)
+    //      - customerName: string (required, 1-100 chars)
+    //      - rating: number (required, 1 to 5)
+    //      - reviewText: string (required, 0-1000 chars)
+    //      - reviewPhoto: string (optional, 0-200000 chars)
+    //      - createdAt: number or string (required, 0-100 chars if string)
     //
     // ===============================================================
 
@@ -135,7 +152,7 @@ service cloud.firestore {
         isValidOptionalString(data, 'subcategory', 0, 60) &&
         data.price is number && data.price > 0 && data.price <= 50000 &&
         isValidString(data.description, 0, 1000) &&
-        isValidString(data.image, 1, 500) &&
+        isValidString(data.image, 1, 200000) &&
         data.inStock is bool &&
         data.isVeg is bool &&
         isValidOptionalNumber(data, 'rating', 0, 5) &&
@@ -149,8 +166,8 @@ service cloud.firestore {
         isValidString(data.id, 1, 100) &&
         isValidString(data.title, 1, 150) &&
         isValidOptionalString(data, 'subtitle', 0, 300) &&
-        isValidString(data.imageDesktop, 1, 500) &&
-        isValidString(data.imageMobile, 1, 500) &&
+        isValidString(data.imageDesktop, 1, 200000) &&
+        isValidString(data.imageMobile, 1, 200000) &&
         isValidString(data.linkUrl, 1, 300) &&
         data.isActive is bool &&
         data.displayOrder is number && data.displayOrder >= 0 && data.displayOrder <= 1000;
@@ -158,7 +175,7 @@ service cloud.firestore {
 
     function isValidSettingsConfig(data) {
       return hasRequiredFields(data, ['is_kitchen_open', 'home_delivery_enabled', 'takeaway_enabled', 'opening_hours', 'avg_prep_time', 'delivery_radius', 'restaurant_phone', 'kitchen_phone']) &&
-        hasOnlyAllowedFields(data, ['is_kitchen_open', 'home_delivery_enabled', 'takeaway_enabled', 'opening_hours', 'avg_prep_time', 'delivery_radius', 'restaurant_phone', 'kitchen_phone', 'audio_alerts']) &&
+        hasOnlyAllowedFields(data, ['is_kitchen_open', 'home_delivery_enabled', 'takeaway_enabled', 'opening_hours', 'avg_prep_time', 'delivery_radius', 'restaurant_phone', 'kitchen_phone', 'audio_alerts', 'manual_override', 'manual_override_time']) &&
         data.is_kitchen_open is bool &&
         data.home_delivery_enabled is bool &&
         data.takeaway_enabled is bool &&
@@ -167,7 +184,9 @@ service cloud.firestore {
         isValidString(data.delivery_radius, 1, 50) &&
         isValidString(data.restaurant_phone, 1, 30) &&
         isValidString(data.kitchen_phone, 1, 30) &&
-        isValidOptionalBool(data, 'audio_alerts');
+        isValidOptionalBool(data, 'audio_alerts') &&
+        isValidOptionalBool(data, 'manual_override') &&
+        isValidOptionalString(data, 'manual_override_time', 0, 100);
     }
 
     function isValidSettingsAdmins(data) {
@@ -197,7 +216,7 @@ service cloud.firestore {
         item.name is string && item.name.size() >= 1 && item.name.size() <= 100 &&
         item.price is number && item.price > 0 && item.price <= 50000 &&
         item.quantity is number && item.quantity >= 1 && item.quantity <= 100 &&
-        (!('image' in item) || (item.image is string && item.image.size() <= 500)) &&
+        (!('image' in item) || (item.image is string && item.image.size() <= 200000)) &&
         (!('dishId' in item) || (item.dishId is string && item.dishId.size() <= 100));
     }
 
@@ -207,7 +226,8 @@ service cloud.firestore {
           'id', 'status', 'placedTime', 'completedTime', 'orderType', 'paymentMode',
           'customerName', 'customerPhone', 'customerAddressOrTable', 'specialInstruction',
           'deliveryPartnerName', 'deliveryPartnerPhone', 'items', 'subtotal', 'deliveryFee',
-          'total', 'prepTime', 'declineReason', 'timestamp', 'customerId'
+          'total', 'prepTime', 'declineReason', 'timestamp', 'customerId',
+          'rating', 'reviewText', 'reviewPhoto', 'ratedAt'
         ]) &&
         isValidString(data.id, 1, 50) &&
         data.status is string &&
@@ -232,7 +252,23 @@ service cloud.firestore {
         isValidOptionalString(data, 'prepTime', 0, 50) &&
         isValidOptionalString(data, 'declineReason', 0, 200) &&
         isValidOptionalString(data, 'customerId', 0, 128) &&
-        (!('timestamp' in data) || data.timestamp is number);
+        (!('timestamp' in data) || data.timestamp is number) &&
+        isValidOptionalNumber(data, 'rating', 1, 5) &&
+        isValidOptionalString(data, 'reviewText', 0, 1000) &&
+        isValidOptionalString(data, 'reviewPhoto', 0, 200000) &&
+        (!('ratedAt' in data) || data.ratedAt is number || (data.ratedAt is string && data.ratedAt.size() <= 100));
+    }
+
+    function isValidReview(data) {
+      return hasRequiredFields(data, ['id', 'orderId', 'customerName', 'rating', 'reviewText', 'createdAt']) &&
+        hasOnlyAllowedFields(data, ['id', 'orderId', 'customerName', 'rating', 'reviewText', 'reviewPhoto', 'createdAt']) &&
+        isValidString(data.id, 1, 100) &&
+        isValidString(data.orderId, 1, 100) &&
+        isValidString(data.customerName, 1, 100) &&
+        data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+        isValidString(data.reviewText, 0, 1000) &&
+        isValidOptionalString(data, 'reviewPhoto', 0, 200000) &&
+        (data.createdAt is number || (data.createdAt is string && data.createdAt.size() <= 100));
     }
 
     // ===============================================================
@@ -277,7 +313,14 @@ service cloud.firestore {
       allow delete: if true;
     }
 
-    // 6. User Profiles: Isolated by user ID
+    // 6. Reviews: Publicly readable customer feedback and ratings, modifiable with schema validation
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create, update: if isValidReview(request.resource.data);
+      allow delete: if true;
+    }
+
+    // 7. User Profiles: Isolated by user ID
     match /users/{userId} {
       allow read, write: if true;
     }

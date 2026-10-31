@@ -5,6 +5,7 @@ import { SEARCHABLE_MENU } from '../data/searchableMenu';
 import type { SearchableMenuItem } from '../data/searchableMenu';
 import { VegBadge, WhatsAppIcon } from './Icons';
 import { isAdminLoggedIn, getCustomerAuth, clearCustomerAuth, type CustomerAuth } from '../services/auth';
+import { getFavorites } from '../services/favorites';
 import { getDishImage } from '../data/menuPageData';
 
 interface HeaderProps {
@@ -29,17 +30,25 @@ export const Header: React.FC<HeaderProps> = ({
   const [addedToast, setAddedToast] = useState<string | null>(null);
   const [userAuth, setUserAuth] = useState<CustomerAuth | null>(() => getCustomerAuth());
   const [isAdmin, setIsAdmin] = useState<boolean>(() => isAdminLoggedIn());
+  const [favCount, setFavCount] = useState<number>(() => getFavorites().length);
 
   useEffect(() => {
     const handleAuthChange = () => {
       setUserAuth(getCustomerAuth());
       setIsAdmin(isAdminLoggedIn());
     };
+    const handleFavChange = () => {
+      setFavCount(getFavorites().length);
+    };
     window.addEventListener('gw_auth_changed', handleAuthChange);
+    window.addEventListener('gw_favorites_changed', handleFavChange);
     window.addEventListener('storage', handleAuthChange);
+    window.addEventListener('storage', handleFavChange);
     return () => {
       window.removeEventListener('gw_auth_changed', handleAuthChange);
+      window.removeEventListener('gw_favorites_changed', handleFavChange);
       window.removeEventListener('storage', handleAuthChange);
+      window.removeEventListener('storage', handleFavChange);
     };
   }, []);
 
@@ -457,6 +466,25 @@ export const Header: React.FC<HeaderProps> = ({
               {link.label}
             </a>
           ))}
+
+          {/* My Favourites (3-lines menu) */}
+          <a
+            href="#favourites"
+            onClick={(e) => {
+              e.preventDefault();
+              setMobileMenuOpen(false);
+              handleLinkClick('#favourites');
+            }}
+            className="flex items-center justify-between px-3 py-2.5 rounded-md text-base font-medium text-[#E5DCB8] hover:bg-[#2B180F] hover:text-white transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-red-400">❤️</span>
+              <span>My Favourites</span>
+            </span>
+            <span className="text-xs bg-[#C9A45C] text-[#1E110A] font-bold px-2.5 py-0.5 rounded-full">
+              {favCount}
+            </span>
+          </a>
 
           {/* User Account & Log Out / Sign In option in Mobile Menu */}
           {userAuth && userAuth.verified ? (

@@ -23,6 +23,29 @@ interface PastOrder {
   dishesSummary: string;
   moreCount?: number;
   items: OrderItem[];
+  rating?: number;
+  reviewText?: string;
+  reviewPhoto?: string;
+}
+
+function formatOrderDateTime(rawTime?: string, timestamp?: number): string {
+  if (timestamp && typeof timestamp === 'number') {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) {
+      const datePart = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      const timePart = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+      return `${datePart} at ${timePart}`;
+    }
+  }
+  if (rawTime) {
+    if (/\d{4}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i.test(rawTime)) {
+      return rawTime;
+    }
+    const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `${today} • ${rawTime}`;
+  }
+  const now = new Date();
+  return `${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
 }
 
 interface OrdersPageProps {
@@ -65,8 +88,9 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
         setActiveOrder({
           id: latest.id,
           rawStatus: latest.status,
-          placedAt: latest.placedTime || 'Recently placed',
-          completedAt: latest.completedTime || 'Recently delivered',
+          placedAt: formatOrderDateTime(latest.placedTime, latest.timestamp),
+          completedAt: formatOrderDateTime(latest.completedTime, latest.timestamp),
+          rating: latest.rating,
           status:
             latest.status === 'New'
               ? 'Order Placed & Confirmed'
@@ -126,7 +150,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
       if (completed.length > 0) {
         const mapped: PastOrder[] = completed.map((o) => ({
           id: o.id,
-          date: o.completedTime || o.placedTime || 'Recently',
+          date: formatOrderDateTime(o.completedTime || o.placedTime, o.timestamp),
           itemsCount: (o.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0),
           total: o.total || 0,
           status: o.status === 'Declined' ? 'Cancelled' : 'Delivered',
@@ -134,6 +158,9 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
           subImages: (o.items || []).slice(1, 4).map((i: any) => i.image || '/images/orders/p1_sub1.jpg'),
           dishesSummary: (o.items || []).map((i: any) => i.name).slice(0, 3).join(', '),
           moreCount: Math.max(0, (o.items || []).length - 3),
+          rating: o.rating,
+          reviewText: o.reviewText,
+          reviewPhoto: o.reviewPhoto,
           items: (o.items || []).map((i: any, idx: number) => ({
             id: `past-it-${idx}`,
             name: i.name,
@@ -221,6 +248,71 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
     message?: string;
     items?: OrderItem[];
   } | null>(null);
+
+  // Customer Review & Rating State
+  const [reviewOrder, setReviewOrder] = useState<{ id: string; name?: string } | null>(null);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewComment, setReviewComment] = useState<string>('');
+  const [reviewPhoto, setReviewPhoto] = useState<string>('');
+  const [submittingReview, setSubmittingReview] = useState<boolean>(false);
+
+  const handleReviewPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 800;
+          if (width > height && width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.75);
+            setReviewPhoto(compressed);
+          }
+        };
+        img.src = ev.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Review photo upload notice:', err);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewOrder) return;
+    setSubmittingReview(true);
+    try {
+      await api.submitOrderReview(reviewOrder.id, reviewRating, reviewComment, reviewPhoto);
+      showToast(`Thank you! Your ${reviewRating}-star rating for Order ${reviewOrder.id} is submitted.`);
+      setPastOrders((prev) =>
+        prev.map((o) => (o.id === reviewOrder.id ? { ...o, rating: reviewRating, reviewText: reviewComment, reviewPhoto } : o))
+      );
+      if (activeOrder && activeOrder.id === reviewOrder.id) {
+        setActiveOrder((prev: any) => ({ ...prev, rating: reviewRating }));
+      }
+      setReviewOrder(null);
+    } catch (err) {
+      console.error('Failed to submit review:', err);
+      showToast('Review saved locally.');
+      setReviewOrder(null);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -742,8 +834,28 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
               </div>
             </div>
 
-            {/* Restaurant Call & Support Option (Replaces direct cancel) */}
-            <div>
+            {/* Action buttons: Rate (if delivered) + Call Support */}
+            <div className="flex flex-wrap items-center gap-2">
+              {isDelivered && (
+                liveOrder.rating ? (
+                  <span className="bg-[#FFF8E7] border border-[#E6C675] text-[#8F5D2C] text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1">
+                    ⭐ {liveOrder.rating}/5 Rated
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReviewOrder({ id: liveOrder.id });
+                      setReviewRating(5);
+                      setReviewComment('');
+                      setReviewPhoto('');
+                    }}
+                    className="bg-[#168039] hover:bg-[#12682E] text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  >
+                    <span>⭐ Rate Order</span>
+                  </button>
+                )
+              )}
               <a
                 href="tel:+919066906607"
                 className="w-full sm:w-auto bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
@@ -880,6 +992,28 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                       </span>
                     )}
 
+                    {/* Rate & Review Button (Delivered Orders) */}
+                    {order.status === 'Delivered' && (
+                      order.rating ? (
+                        <span className="inline-flex items-center gap-1 bg-[#FFF8E7] text-[#8F5D2C] border border-[#E6C675] text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs">
+                          ⭐ {order.rating}/5
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReviewOrder({ id: order.id });
+                            setReviewRating(5);
+                            setReviewComment('');
+                            setReviewPhoto('');
+                          }}
+                          className="bg-[#DCE8CB] hover:bg-[#163E26] text-[#163E26] hover:text-white border border-[#163E26]/20 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all shadow-2xs cursor-pointer"
+                        >
+                          <span>⭐ Rate</span>
+                        </button>
+                      )
+                    )}
+
                     {/* Action Button */}
                     {order.status === 'Delivered' ? (
                       <button
@@ -982,29 +1116,52 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                       View Details →
                     </button>
 
-                    {order.status === 'Delivered' ? (
-                      <button
-                        type="button"
-                        onClick={() => handleReorderClick(order)}
-                        className="bg-[#163E26] text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs"
-                      >
-                        ⟳ Reorder
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveModal({
-                            type: 'details',
-                            title: `Order Details • ${order.id}`,
-                            items: order.items,
-                          })
-                        }
-                        className="text-xs font-medium text-[#4B5149] border border-[#E8DDCA] px-3 py-1.5 rounded-lg"
-                      >
-                        Details
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {order.status === 'Delivered' && (
+                        order.rating ? (
+                          <span className="text-[10px] font-semibold text-[#8F5D2C] bg-[#FFF8E7] border border-[#E6C675] px-2 py-1 rounded-lg">
+                            ⭐ {order.rating}/5
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReviewOrder({ id: order.id });
+                              setReviewRating(5);
+                              setReviewComment('');
+                              setReviewPhoto('');
+                            }}
+                            className="bg-[#DCE8CB] text-[#163E26] text-[10px] font-semibold px-2 py-1 rounded-lg hover:bg-[#163E26] hover:text-white transition-colors cursor-pointer"
+                          >
+                            ⭐ Rate
+                          </button>
+                        )
+                      )}
+
+                      {order.status === 'Delivered' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleReorderClick(order)}
+                          className="bg-[#163E26] text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs"
+                        >
+                          ⟳ Reorder
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveModal({
+                              type: 'details',
+                              title: `Order Details • ${order.id}`,
+                              items: order.items,
+                            })
+                          }
+                          className="text-xs font-medium text-[#4B5149] border border-[#E8DDCA] px-3 py-1.5 rounded-lg"
+                        >
+                          Details
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1082,6 +1239,124 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                   <span>📞 Call Restaurant (+91 90669 06607)</span>
                 </a>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Order Rating & Review Modal */}
+      {reviewOrder && (
+        <div className="fixed inset-0 z-50 bg-[#0B130F]/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FFFDF8] rounded-2xl max-w-md w-full border border-[#E8DDCA] p-5 sm:p-6 shadow-2xl relative animate-scale-up">
+            {/* Close */}
+            <button
+              type="button"
+              onClick={() => setReviewOrder(null)}
+              className="absolute top-4 right-4 text-[#77766D] hover:text-[#17261D] p-1 cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="text-center mb-4">
+              <span className="text-2xl">⭐</span>
+              <h3 className="font-serif text-lg sm:text-xl font-bold text-[#17261D] mt-1">
+                Rate &amp; Review Your Order
+              </h3>
+              <p className="text-xs text-[#77766D] mt-0.5">
+                Order <span className="font-semibold text-[#17261D]">{reviewOrder.id}</span> • Greenwood Pure Veg
+              </p>
+            </div>
+
+            {/* Interactive 5-Star Rating */}
+            <div className="flex items-center justify-center gap-2.5 my-3">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setReviewRating(star)}
+                  className="text-3xl transition-transform hover:scale-125 focus:outline-none cursor-pointer"
+                  title={`${star} Star`}
+                >
+                  <span className={star <= reviewRating ? 'text-[#F59E0B]' : 'text-[#D1D5DB]'}>
+                    ★
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="text-center text-xs font-semibold text-[#8F5D2C] mb-4">
+              {reviewRating === 5
+                ? 'Excellent! Loved the food & service'
+                : reviewRating === 4
+                ? 'Very Good experience'
+                : reviewRating === 3
+                ? 'Average'
+                : 'Needs Improvement'}
+            </div>
+
+            {/* Comment Area */}
+            <div className="mb-3">
+              <label className="text-xs font-semibold text-[#17261D] block mb-1">
+                Your Feedback (Optional)
+              </label>
+              <textarea
+                rows={3}
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder="How was the taste, freshness, and packaging? Tell us..."
+                className="w-full bg-[#FAF6EE] p-2.5 rounded-xl border border-[#E8DDCA] text-xs text-[#17261D] focus:outline-none focus:border-[#163E26] resize-none"
+              />
+            </div>
+
+            {/* Real Image File Upload with Instant Canvas Preview */}
+            <div className="mb-4">
+              <label className="text-xs font-semibold text-[#17261D] block mb-1">
+                Upload Dish Photo (Optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleReviewPhotoUpload}
+                className="text-xs text-[#4B5149] file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#163E26] file:text-white hover:file:bg-[#1E5233] cursor-pointer"
+              />
+              {reviewPhoto && (
+                <div className="mt-2 relative inline-block">
+                  <img
+                    src={reviewPhoto}
+                    alt="Preview"
+                    className="w-20 h-16 object-cover rounded-lg border border-[#E8DDCA] shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setReviewPhoto('')}
+                    className="absolute -top-1.5 -right-1.5 bg-[#C83A25] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer"
+                    title="Remove photo"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Submit Action */}
+            <div className="pt-3 border-t border-[#E8DDCA] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReviewOrder(null)}
+                className="bg-[#FAF6EE] hover:bg-[#E8DDCA] text-[#4B5149] text-xs font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingReview}
+                onClick={handleSubmitReview}
+                className="bg-[#163E26] hover:bg-[#1E5233] text-white text-xs font-semibold px-5 py-2 rounded-lg transition-all shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span>{submittingReview ? 'Submitting...' : 'Submit Rating'}</span>
+                <span>→</span>
+              </button>
             </div>
           </div>
         </div>
