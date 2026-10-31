@@ -183,7 +183,8 @@ const DEFAULT_DISHES: ApiDish[] = SEARCHABLE_MENU.map((i) => ({
   reviews_count: i.reviewsCount || 45,
 }));
 
-export const isLegacyMockDishId = (id: string): boolean => /^dish-(?:[1-9]|1[0-8])$/.test(id);
+export const isLegacyMockDishId = (id: string): boolean =>
+  /^(?:item|dish)-(?:[1-9]|1[0-8])$/.test(id);
 
 export function ensureFullCatalogue(dishesList: ApiDish[]): ApiDish[] {
   if (!dishesList || dishesList.length === 0) return DEFAULT_DISHES;
@@ -382,7 +383,12 @@ export const api = {
   // 2. Dishes
   getDishesSync(): ApiDish[] {
     const raw = getStorageItem<ApiDish[]>('dishes', DEFAULT_DISHES);
-    return ensureFullCatalogue(raw);
+    const clean = ensureFullCatalogue(raw);
+    // If cache had legacy items, overwrite localStorage with clean catalogue
+    if (Array.isArray(raw) && raw.some((d) => isLegacyMockDishId(d.id))) {
+      setStorageItem('dishes', clean, false);
+    }
+    return clean;
   },
 
   async getDishes(): Promise<ApiDish[]> {
